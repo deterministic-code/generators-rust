@@ -1,0 +1,11 @@
+[package]
+name = "migrate-runners"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dotenvy = "0.15"
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "postgres", "mysql"] }
+# Pin transitive sqlx dep: time 0.3.50 has a time-macros version-skew regression (E0432 unresolved import time_macros::timestamp). Matches main's Cargo.lock.
+time = "=0.3.47"

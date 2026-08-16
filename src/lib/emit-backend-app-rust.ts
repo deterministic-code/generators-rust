@@ -7,10 +7,12 @@ import { SECTION_MARKERS } from "@deterministic-code/generator-sdk/section-marke
 import { RUST_APP_DEPS, RUST_APP_DEV_DEPS } from "./rust-deps.ts";
 import { DEV_PORTS } from "@deterministic-code/generator-sdk/create-backend-app-model";
 import {
-  loadChunk,
+  makeChunkLoader,
   applyTokens,
-  renderDialectMap,
 } from "@deterministic-code/generator-sdk/codegen/lib/chunk-loader";
+import { PACK_ROOT, PACK_TEMPLATES_DIR } from "../pack-root.ts";
+
+const { loadChunk, renderDialectMap } = makeChunkLoader(PACK_TEMPLATES_DIR);
 import { filterChunks } from "@deterministic-code/generator-sdk/dialect-filter";
 import { rustSqlxDepLine } from "@deterministic-code/generator-sdk/lib/migrate-scripts-plan";
 import {
@@ -25,7 +27,7 @@ import {
   DOCKERIGNORE_TRIGGER,
   dockerignoreSection,
 } from "@deterministic-code/patch-merger";
-import { REPO_ROOT, firstExistingDir } from "@deterministic-code/generator-sdk/codegen/lib/artifact-paths";
+import { firstExistingDir } from "@deterministic-code/generator-sdk/codegen/lib/artifact-paths";
 import type { EmitEntry } from "@deterministic-code/generator-sdk/codegen/lib/emit-result";
 import {
   CONTENT,
@@ -57,9 +59,7 @@ interface RegistryOverrides {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RUST_ENTRYPOINT_TEMPLATE_PATH = resolve(
-  here,
-  "..",
-  "templates",
+  PACK_TEMPLATES_DIR,
   "create-backend-app",
   "rust",
   "entrypoint.sh",
@@ -215,7 +215,7 @@ _deterministic/rust/target/
 }
 
 export async function readLibraryCrateVersion(): Promise<string> {
-  const cargoPath = resolve(REPO_ROOT, "rust", "Cargo.toml");
+  const cargoPath = resolve(PACK_ROOT, "rust", "Cargo.toml");
   const text = await readFile(cargoPath, "utf8");
   const m = text.match(/^\s*version\s*=\s*"([^"]+)"/m);
   if (!m) {
@@ -302,7 +302,7 @@ async function buildRustCrateFiles({
 }
 
 async function bundledRuntimeEntries(): Promise<EmitEntry[]> {
-  const rustSrc = await resolveLibraryRustDir(REPO_ROOT);
+  const rustSrc = await resolveLibraryRustDir(PACK_ROOT);
   return readTreeEntries(rustSrc, "_deterministic/rust", rustBundleExclude);
 }
 

@@ -1,0 +1,29 @@
+[package]
+name = "{{packageName}}"
+version = "0.1.0"
+edition = "2021"
+default-run = "{{packageName}}"
+# autobins off: every extra binary is wired by the step that owns it (migrate → MIGRATE_BIN, perf → PERF_BIN), so un-patched merges leave bin sources inert instead of breaking the build.
+autobins = false
+
+[lib]
+name = "{{packageName}}"
+path = "src/lib.rs"
+
+[[bin]]
+name = "{{packageName}}"
+path = "src/main.rs"
+
+{{MIGRATE_BIN_START}}
+{{MIGRATE_BIN_END}}
+
+{{PERF_BIN_START}}
+{{PERF_BIN_END}}
+
+[dependencies]
+{{detDep}}
+{{appDeps}}{{MIGRATE_DEPS_START}}
+{{MIGRATE_DEPS_END}}
+
+[dev-dependencies]
+{{appDevDeps}}

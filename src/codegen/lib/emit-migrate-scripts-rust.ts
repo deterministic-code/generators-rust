@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { PACK_TEMPLATES_DIR } from "../../pack-root.ts";
 import {
   rustMigrateBinBlock,
   rustSqlxDepLine,
@@ -27,7 +28,7 @@ import { PATCH } from "@deterministic-code/generator-sdk/codegen/lib/emit-result
 import {
   content,
   gitkeepEntries,
-  runnerTemplates,
+  makeRunnerTemplates,
   makeMigrateEmit,
   MIGRATE_DIR_FLAG,
 } from "@deterministic-code/generator-sdk/codegen/lib/migrate-emit-helpers";
@@ -41,7 +42,8 @@ import type {
   MigrateRenderOptions,
 } from "@deterministic-code/generator-sdk/codegen/lib/migrate-scripts-emit-types";
 
-const { read: runnerTemplate, composed } = runnerTemplates("rust");
+const { read: runnerTemplate, composed } =
+  makeRunnerTemplates(PACK_TEMPLATES_DIR)("rust");
 
 async function renderRustMigrateCargoToml(
   dialects: string[] = [],

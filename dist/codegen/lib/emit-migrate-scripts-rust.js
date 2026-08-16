@@ -1,13 +1,14 @@
 import { join } from "node:path";
+import { PACK_TEMPLATES_DIR } from "../../pack-root.js";
 import { rustMigrateBinBlock, rustSqlxDepLine, rustMigrateCopyContent, rustMigrateRuntimeCopyContent, } from "@deterministic-code/generator-sdk/lib/migrate-scripts-plan";
 import { buildRustCargoTomlDepsBlock, rustDialectUseImportsForSetup, rustDialectUseImportsForRunners, rustDialectSqliteUrlHelperBlock, rustDialectDdlConstsBlock, rustDialectSetupDispatchBlock, rustDialectRunnerFnsBlock, rustDialectUpDispatchBlock, rustDialectRollbackFnsBlock, rustDialectDownDispatchBlock, } from "../../lib/emit-backend-app-rust.js";
 import { dbFilePatches, entrypointPatch, markedEntry, dockerfileCopyPatches, } from "@deterministic-code/generator-sdk/codegen/lib/migrate-sibling-patches";
 import { PATCH } from "@deterministic-code/generator-sdk/codegen/lib/emit-result";
-import { content, gitkeepEntries, runnerTemplates, makeMigrateEmit, MIGRATE_DIR_FLAG, } from "@deterministic-code/generator-sdk/codegen/lib/migrate-emit-helpers";
+import { content, gitkeepEntries, makeRunnerTemplates, makeMigrateEmit, MIGRATE_DIR_FLAG, } from "@deterministic-code/generator-sdk/codegen/lib/migrate-emit-helpers";
 import { COMBINED_FLAG } from "@deterministic-code/generator-sdk/codegen/lib/backend-lane";
 import { withSqliteDialect } from "@deterministic-code/generator-sdk/codegen/lib/deterministic-project";
 import { layoutForSettings } from "@deterministic-code/generator-sdk/codegen/lib/ts-codegen-naming";
-const { read: runnerTemplate, composed } = runnerTemplates("rust");
+const { read: runnerTemplate, composed } = makeRunnerTemplates(PACK_TEMPLATES_DIR)("rust");
 async function renderRustMigrateCargoToml(dialects = [], migrateDir = ".") {
     const raw = await runnerTemplate("migrate-Cargo.toml");
     const withBins = raw.replace("[dependencies]", `${rustMigrateBinBlock(migrateDir)}\n\n[dependencies]`);
