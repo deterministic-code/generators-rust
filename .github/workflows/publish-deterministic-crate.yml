@@ -1,0 +1,66 @@
+name: Publish deterministic crate
+
+on:
+  push:
+    tags:
+      - "crate-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version override (must equal rust/Cargo.toml#version); leave blank for manual local-tag publishes"
+        required: false
+        type: string
+      dry_run:
+        description: "Run cargo publish --dry-run (no upload)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    name: cargo publish --registry deterministic-code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            ref="${{ github.ref_name }}"
+            echo "version=${ref#crate-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build dry-run flag
+        id: dryrun
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "flag=--dry-run" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        env:
+          CARGO_REGISTRIES_DETERMINISTIC_CODE_TOKEN: ${{ secrets.DETERMINISTIC_REGISTRY_PUBLISH_TOKEN }}
+        run: |
+          args=()
+          if [ -n "${{ steps.ver.outputs.version }}" ]; then
+            args+=(--version "${{ steps.ver.outputs.version }}")
+          fi
+          if [ -n "${{ steps.dryrun.outputs.flag }}" ]; then
+            args+=(--dry-run)
+          fi
+          node scripts/publish-deterministic-crate.ts "${args[@]}"
