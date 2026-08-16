@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "module": "nodenext", "moduleResolution": "nodenext", "target": "ES2022",
-    "lib": ["ES2022"], "types": ["node"], "declaration": false, "outDir": "dist",
+    "lib": ["ES2022"], "types": ["node"], "declaration": true, "outDir": "dist",
     "rootDir": "src", "allowImportingTsExtensions": true, "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true, "skipLibCheck": true, "strict": true, "forceConsistentCasingInFileNames": true
   },

@@ -4,10 +4,16 @@
   "description": "Rust generator pack for the deterministic toolchain: the emit-*-rust lane modules and the deterministic runtime crate.",
   "type": "module",
   "exports": {
-    "./*": "./dist/*.js",
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.build.json --noEmit"
@@ -16,5 +22,8 @@
     "@deterministic-code/generator-sdk": "github:deterministic-code/generators-common",
     "@deterministic-code/patch-merger": "github:deterministic-code/patch-merger"
   },
-  "devDependencies": { "@types/node": "^22.10.0", "typescript": "^5.8.0" }
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.8.0"
+  }
 }
