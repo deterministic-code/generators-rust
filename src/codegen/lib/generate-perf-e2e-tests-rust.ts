@@ -1,4 +1,5 @@
 import type { GeneratedFile } from "@deterministic-code/generator-sdk/codegen/lib/routes-generate-types";
+import { makeGenerate } from "@deterministic-code/generator-sdk/codegen/lib/make-generate";
 
 const FILE_BODY = `use std::collections::HashMap;
 use std::env;
@@ -553,10 +554,8 @@ const PERF_E2E_BASENAME = "app_perf_client.rs";
 export const rustModuleWiring = false;
 
 /** Self-describing catalog `perf_e2e_tests` (rust): the perf e2e client binary that replays performance-plan.yaml against a running backend. The `--output` already resolves to the crate's `tests` dir, so the file is placed by basename. */
-export async function generate() {
-  return {
-    files: [
-      { path: PERF_E2E_BASENAME, content: generatePerfE2eTestRust().content },
-    ],
-  };
-}
+export const generate = makeGenerate(async () => ({
+  files: [
+    { path: PERF_E2E_BASENAME, content: generatePerfE2eTestRust().content },
+  ],
+}));

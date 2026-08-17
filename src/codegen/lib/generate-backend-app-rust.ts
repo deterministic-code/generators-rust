@@ -2,10 +2,7 @@
 
 import { generateBackendApp } from "../../lib/generate-backend-app-rust.ts";
 import { makeBackendAppGenerate } from "@deterministic-code/generator-sdk/codegen/lib/backend-app-generate-helpers";
-import { COMBINED_FLAG } from "@deterministic-code/generator-sdk/codegen/lib/backend-lane";
 
 export const generate = makeBackendAppGenerate(generateBackendApp, "rust");
-export const entriesNative = true;
 export const pinProjectRoot = true;
-export const flags = [COMBINED_FLAG];
 export const rustModuleWiring = false;

@@ -30,9 +30,7 @@ import {
   gitkeepEntries,
   makeRunnerTemplates,
   makeMigrateGenerate,
-  MIGRATE_DIR_FLAG,
 } from "@deterministic-code/generator-sdk/codegen/lib/migrate-generate-helpers";
-import { COMBINED_FLAG } from "@deterministic-code/generator-sdk/codegen/lib/backend-lane";
 import { withSqliteDialect } from "@deterministic-code/generator-sdk/codegen/lib/deterministic-project";
 import { layoutForSettings } from "@deterministic-code/generator-sdk/codegen/lib/ts-codegen-naming";
 import type {
@@ -146,8 +144,8 @@ export const migrateRust = {
   generate: rustEntries,
 };
 
-export const generate = makeMigrateGenerate(rustEntries);
-export const flags = [MIGRATE_DIR_FLAG, COMBINED_FLAG];
-export const entriesNative = true;
+const MIGRATE_DIR = "src/bin";
+
+export const generate = makeMigrateGenerate(rustEntries, MIGRATE_DIR);
 export const pinProjectRoot = true;
 export const rustModuleWiring = false;
