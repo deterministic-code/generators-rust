@@ -1,4 +1,4 @@
-import type { ParsedSettings } from "@deterministic-code/generator-sdk/read-settings";
+import type { SettingsDict } from "@deterministic-code/generator-sdk/settings-dict";
 import {
   generateServicesFiles,
   dispatchServicesStep,
@@ -41,7 +41,7 @@ interface ServicesGenerateConfig {
   viewTypes: unknown;
   datasourceTypes: unknown;
   routes: unknown;
-  settings: ParsedSettings;
+  settings: SettingsDict;
   language: unknown;
 }
 
