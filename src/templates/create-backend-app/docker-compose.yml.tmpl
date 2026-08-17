@@ -1,0 +1,17 @@
+app:
+  build:
+    context: .
+  ports:
+    - '${HOST_PORT:-4002}:4000'
+  environment:
+    - PORT=4000
+    - DETERMINISTIC_DIR=/app/deterministic
+    - DETERMINISTIC_TRACE=${DETERMINISTIC_TRACE:-}
+  healthcheck:
+    test: ['CMD-SHELL', "curl -fsS -o /dev/null -w 'HTTP %{http_code}\\n' http://localhost:4000/api/health || (echo 'probe failed' && exit 1)"]
+    interval: 5s
+    timeout: 3s
+    retries: 12
+    start_period: 10s
+  labels:
+    - 'deterministic.language=rust'

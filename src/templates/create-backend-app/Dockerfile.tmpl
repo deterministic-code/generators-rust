@@ -6,22 +6,21 @@ ADD https://github.com/mozilla/sccache/releases/download/v0.8.2/sccache-v0.8.2-x
 RUN tar -xzf /tmp/sccache.tar.gz -C /tmp && mv /tmp/sccache-v0.8.2-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache && chmod +x /usr/local/bin/sccache
 ENV RUSTC_WRAPPER=sccache SCCACHE_DIR=/sccache CARGO_INCREMENTAL=0
 WORKDIR /app
-COPY {{rustPrefix}}Cargo.toml ./
-COPY {{rustPrefix}}src ./src
-{{sourceCopy}}
-{{MIGRATE_COPY_START}}
-{{MIGRATE_COPY_END}}
+COPY Cargo.toml ./
+COPY src ./src
+# === BEGIN MIGRATE_COPY — see PATCH_PLAN in create-migrate-scripts.mjs ===
+# === END MIGRATE_COPY ===
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked --mount=type=cache,target=/sccache,sharing=locked cargo build --release
 
 # Stage 2: runtime — extends the builder (keeps cargo + sources + the build cache) so the verify pipeline's in-container `cargo test` runs; mirrors the TS Dockerfile, which ships node + sources + devDependencies for the same reason. A debian-slim runtime strips cargo and fails `docker compose run rust cargo test`.
 FROM builder
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 curl sqlite3 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=builder /app/target/release/{{binaryName}} /usr/local/bin/{{binaryName}}
-{{MIGRATE_RUNTIME_COPY_START}}
-{{MIGRATE_RUNTIME_COPY_END}}
+COPY --from=builder /app/target/release/{{crateIdent}} /usr/local/bin/{{crateIdent}}
+# === BEGIN MIGRATE_RUNTIME_COPY — see PATCH_PLAN in create-migrate-scripts.mjs ===
+# === END MIGRATE_RUNTIME_COPY ===
 COPY deterministic /app/deterministic
-COPY {{rustPrefix}}scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 ENV PORT=4000
 ENV DETERMINISTIC_DIR=/app/deterministic
@@ -29,4 +28,4 @@ EXPOSE 4000
 HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=12 \
   CMD curl -fsS -o /dev/null -w 'HTTP %{http_code}\n' http://localhost:4000/api/health || (echo "probe failed" && exit 1)
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["{{binaryName}}"]
+CMD ["{{crateIdent}}"]

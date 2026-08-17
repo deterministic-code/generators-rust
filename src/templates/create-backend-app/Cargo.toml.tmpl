@@ -1,0 +1,42 @@
+[package]
+name = "{{crateIdent}}"
+version = "0.1.0"
+edition = "2021"
+default-run = "{{crateIdent}}"
+# autobins off: every extra binary is wired by the step that owns it (migrate → MIGRATE_BIN, perf → PERF_BIN), so un-patched merges leave bin sources inert instead of breaking the build.
+autobins = false
+
+[lib]
+name = "{{crateIdent}}"
+path = "src/lib.rs"
+
+[[bin]]
+name = "{{crateIdent}}"
+path = "src/main.rs"
+
+# === BEGIN MIGRATE_BIN — see PATCH_PLAN in create-migrate-scripts.mjs ===
+# === END MIGRATE_BIN ===
+
+# === BEGIN PERF_BIN — see PATCH_PLAN in create-migrate-scripts.mjs ===
+# === END PERF_BIN ===
+
+[dependencies]
+deterministic = "0.0.6"
+async-trait = "0.1"
+axum = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+time = "=0.3.47"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1.10", features = ["v4"] }
+# === BEGIN MIGRATE_DEPS — see PATCH_PLAN in create-migrate-scripts.mjs ===
+# === END MIGRATE_DEPS ===
+
+[dev-dependencies]
+http-body-util = "0.1"
+jsonschema = "0.18"
+once_cell = "1"
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+serde_yaml = "0.9"
+tower = { version = "0.5", features = ["util"] }

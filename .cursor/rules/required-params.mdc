@@ -1,0 +1,33 @@
+---
+description: Require function parameters; only use ? and default args when they are actually optional.
+globs: **/*.ts
+alwaysApply: true
+---
+
+# Required parameters
+
+Mark parameters optional (`?`) or give default arguments only when a caller is meant to omit them. If the value is always provided, type it as required and do not fall back with `??` / `||` at the call boundary.
+
+```typescript
+// ❌
+export const generateBackendApp = async (args: {
+  reader?: IDeterministicReader;
+  settings?: GenerateContext["settings"];
+}) =>
+  generate({
+    reader: args.reader ?? memoryReader({}),
+    settings: args.settings ?? {},
+  });
+
+// ✅
+export const generateBackendApp = async (args: {
+  reader: IDeterministicReader;
+  settings: GenerateContext["settings"];
+}) =>
+  generate({
+    reader: args.reader,
+    settings: args.settings,
+  });
+```
+
+`section?: string` on a patch helper is fine: the section is genuinely optional.
