@@ -17,6 +17,7 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R src/templates dist/",
+    "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "test": "vitest run"
   },
