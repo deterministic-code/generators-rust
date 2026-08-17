@@ -1,5 +1,5 @@
 import { posix, basename, dirname, join, relative, sep } from "node:path";
-import { PATCH } from "@deterministic-code/generator-sdk/codegen/lib/emit-result";
+import { PATCH } from "@deterministic-code/generator-sdk/codegen/lib/generate-result";
 function toPosix(p) {
     return sep === "/" ? p : p.split(sep).join("/");
 }
@@ -16,7 +16,7 @@ function findSrcRoot(leafDir) {
     }
     return null;
 }
-/** Struct name of a rust custom service (mirrors the stub emitter: `impl DynamicService` + a `pub struct`); null otherwise. */
+/** Struct name of a rust custom service (mirrors the stub generator: `impl DynamicService` + a `pub struct`); null otherwise. */
 function customServiceStruct(content) {
     if (!/\bimpl\s+DynamicService\s+for\b/.test(content))
         return null;
@@ -85,7 +85,7 @@ function piecesForFile(srcRelPath, custom) {
     }
     return out;
 }
-/** The `mod.rs`/`lib.rs` patch pieces a rust step contributes for the source files it emits (targets are src-root-relative; the caller re-addresses them). Pure — no directory reads. */
+/** The `mod.rs`/`lib.rs` patch pieces a rust step contributes for the source files it generates (targets are src-root-relative; the caller re-addresses them). Pure — no directory reads. */
 export function rustModulePieces(srcRelPaths, customServices = new Map()) {
     return srcRelPaths.flatMap((p) => piecesForFile(p, customServices.get(p)));
 }
@@ -105,8 +105,8 @@ export function isWireableRustFile(srcRelPath) {
 }
 /**
  * The `{kind:PATCH}` module-wiring entries a rust step contributes for the files
- * it just emitted (`files: {path, content}` with `path` relative to `outDir`).
- * Derives everything from that emitted list — never reads the directory. Returns
+ * it just generated (`files: {path, content}` with `path` relative to `outDir`).
+ * Derives everything from that generated list — never reads the directory. Returns
  * `[]` when the step's output isn't under a crate `src/` (backend_app's crate
  * root, migrate, perf bin, tests/).
  */

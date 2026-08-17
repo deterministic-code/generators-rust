@@ -5,7 +5,7 @@ interface RustUseOpts {
     layout: CodegenLayout;
     root?: string;
 }
-/** The Rust `CodegenLayout` for a resolved emit-options object — placement (feature dirs, file paths) stays SDK-owned. */
+/** The Rust `CodegenLayout` for a resolved generate-options object — placement (feature dirs, file paths) stays SDK-owned. */
 export declare function rustLayout(options?: NamesForOptions): CodegenLayout;
 /** `use <root>::…::<service-module>::<symbol>;` for a generated service a router, sibling service, or test depends on. The module stem is the SDK-canonical service file base for the entity. */
 export declare function serviceUseLine(entity: string, symbol: string, opts: RustUseOpts): string;

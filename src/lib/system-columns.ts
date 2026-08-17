@@ -22,7 +22,7 @@ function eachField(
   }
 }
 
-/** The system columns the migration emitter auto-injects for this entity — `id` unless a `primary_key` field is declared, plus `uuid`/`created`/`updated` unless it is a readonly-lookup or carries a custom primary key. Mirrors emit-sql's `emitCreateTable` + `tableHasAuditColumns`. */
+/** The system columns the migration generator auto-injects for this entity — `id` unless a `primary_key` field is declared, plus `uuid`/`created`/`updated` unless it is a readonly-lookup or carries a custom primary key. Mirrors generate-sql's `generateCreateTable` + `tableHasAuditColumns`. */
 export function systemColumnsInjectedFor(def: SystemTypeDef): Set<string> {
   if (def?.skip_migrations === true) return new Set();
   const fields = Array.isArray(def?.fields) ? def.fields : [];

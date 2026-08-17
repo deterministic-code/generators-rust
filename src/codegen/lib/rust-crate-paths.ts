@@ -10,7 +10,7 @@ interface RustUseOpts {
   root?: string;
 }
 
-/** The Rust `CodegenLayout` for a resolved emit-options object — placement (feature dirs, file paths) stays SDK-owned. */
+/** The Rust `CodegenLayout` for a resolved generate-options object — placement (feature dirs, file paths) stays SDK-owned. */
 export function rustLayout(options: NamesForOptions = {}): CodegenLayout {
   return layoutFor({ ...options, language: "rust" });
 }

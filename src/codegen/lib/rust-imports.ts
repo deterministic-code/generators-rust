@@ -13,7 +13,7 @@ interface RustImportsCtx {
   byFeature: boolean;
 }
 
-/** The Rust lane's import authority, injected into an emitter as `ctx.imports`. Rust references sibling generated artifacts by fully-qualified module path; under the by-feature vertical slice each artifact lives in `crate::features::<slice>::<file-module>`, and under the flat business-concern layout in the shared `crate::types::generated::{datasource,views}[::validators]` re-export barrels. All cross-artifact paths derive from `ctx.layout`/`ctx.names`/`ctx.byFeature` so a single reference stays correct as casing or layout changes. */
+/** The Rust lane's import authority, injected into an generator as `ctx.imports`. Rust references sibling generated artifacts by fully-qualified module path; under the by-feature vertical slice each artifact lives in `crate::features::<slice>::<file-module>`, and under the flat business-concern layout in the shared `crate::types::generated::{datasource,views}[::validators]` re-export barrels. All cross-artifact paths derive from `ctx.layout`/`ctx.names`/`ctx.byFeature` so a single reference stays correct as casing or layout changes. */
 export class RustImports {
   ctx: RustImportsCtx;
 
@@ -25,7 +25,7 @@ export class RustImports {
     return `crate::features::${this.ctx.layout.featureDir(entity, artifact)}`;
   }
 
-  /** The by-feature module (feature dir + file stem) an artifact compiles to — derived from the emitted file path so the reference can never drift from placement. */
+  /** The by-feature module (feature dir + file stem) an artifact compiles to — derived from the generated file path so the reference can never drift from placement. */
   #featureModule(entity: string, artifact: string): string {
     const path = this.ctx.layout.filePath(entity, artifact);
     const file = path.slice(path.lastIndexOf("/") + 1);
@@ -115,7 +115,7 @@ export class RustImports {
   }
 }
 
-/** Build a `RustImports` for a test emitter that runs outside an `EntityEmitter` ctx: rebuild layout/names from the resolved emit options so header `use` lines stay layout-aware. */
+/** Build a `RustImports` for a test generator that runs outside an `EntityGenerator` ctx: rebuild layout/names from the resolved generate options so header `use` lines stay layout-aware. */
 export function rustImportsForOptions(opts: NamesForOptions): RustImports {
   return new RustImports({
     layout: layoutFor(opts),

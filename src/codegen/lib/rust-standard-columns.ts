@@ -42,7 +42,7 @@ function rawDeclaredNameSet(def: SystemFieldsInput): Set<string> {
   return out;
 }
 
-/** The Rust struct-literal value for the primary-key `id` field under this id_type, matching the struct the datasource-types emitter renders via `rustIdType()`: a real `uuid::Uuid`, a `String`, or an `i64`. `variant: "next"` yields a distinct second value so `gets_and_sets` tests aren't tautologies (two `new_v4()`s differ). */
+/** The Rust struct-literal value for the primary-key `id` field under this id_type, matching the struct the datasource-types generator renders via `rustIdType()`: a real `uuid::Uuid`, a `String`, or an `i64`. `variant: "next"` yields a distinct second value so `gets_and_sets` tests aren't tautologies (two `new_v4()`s differ). */
 export function rustIdFieldValue(
   ds: DatasourceSettings,
   variant: "sample" | "next" = "sample",

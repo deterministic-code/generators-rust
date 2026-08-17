@@ -1,4 +1,4 @@
-// App-crate deps: exactly the crates emitted code references (types use chrono/uuid, services use async-trait/serde_json, main uses tokio/axum). sqlx/dotenvy ride the MIGRATE_DEPS marker so the migrate step owns SQL coupling.
+// App-crate deps: exactly the crates generated code references (types use chrono/uuid, services use async-trait/serde_json, main uses tokio/axum). sqlx/dotenvy ride the MIGRATE_DEPS marker so the migrate step owns SQL coupling.
 export const RUST_APP_DEPS = `async-trait = "0.1"
 axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
