@@ -1,0 +1,8 @@
+// schema-version: {{schemaVersion}}
+pub fn {{fnName}}({{paramName}}: &{{&typePath}}) -> Result<(), Vec<String>> {
+    {{declared}}: Vec<String> = Vec::new();
+{{#checks}}
+{{&line}}
+{{/checks}}
+    if errors.is_empty() { Ok(()) } else { Err(errors) }
+}

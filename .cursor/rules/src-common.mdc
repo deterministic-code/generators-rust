@@ -9,4 +9,4 @@ Helpers used by more than one generator in this pack go in `src/common/` (e.g. `
 
 Import as `./common/deterministic-reader.ts` (or `../common/...` from a nested file). Do not inline the same helper in each generator, and do not put new files under `src/sdk/`.
 
-`generate` on every lane takes `GenerateContext`: `{ reader, settings }` where `reader` is an `IDeterministicReader` and `settings` is the flat string dict (`application_name`, …).
+`generate` is the only export each lane has. It takes `GenerateContext`: `{ reader, settings }` where `reader` is `{ read, exists }` (`IDeterministicReader`) and `settings` is the flat string dict (`application_name`, …). The host never supplies pack-normalized types — each lane reads YAML and parses it. Do not add per-lane aliases (`generateBackendApp`, `generateDatasourceTypes`, …) or host flags (`pinProjectRoot`, `rustModuleWiring`, `assembleAfterStep`). Import `GenerateEntry` from `./common/generate-entry.ts`, not from a lane module.

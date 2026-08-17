@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { memoryReader } from "./common/deterministic-reader.ts";
-import {
-  generate,
-  type GenerateEntry,
-} from "./generate-backend-app.ts";
+import type { GenerateEntry } from "./common/generate-entry.ts";
+import { generate } from "./generate-backend-app.ts";
 
 const entryBody = (entry: GenerateEntry): string => {
   if ("contents" in entry) return String(entry.contents);
@@ -33,7 +31,7 @@ const requireEntry = (
   return entry;
 };
 
-describe("generateBackendApp", () => {
+describe("generate", () => {
   let byName = new Map<string, GenerateEntry>();
 
   before(async () => {
