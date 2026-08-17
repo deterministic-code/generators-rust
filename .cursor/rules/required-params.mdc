@@ -10,24 +10,22 @@ Mark parameters optional (`?`) or give default arguments only when a caller is m
 
 ```typescript
 // ❌
-export const generateBackendApp = async (args: {
+export const generate = async (ctx: {
   reader?: IDeterministicReader;
   settings?: GenerateContext["settings"];
 }) =>
-  generate({
-    reader: args.reader ?? memoryReader({}),
-    settings: args.settings ?? {},
+  generateInner({
+    reader: ctx.reader ?? memoryReader({}),
+    settings: ctx.settings ?? {},
   });
 
 // ✅
-export const generateBackendApp = async (args: {
-  reader: IDeterministicReader;
-  settings: GenerateContext["settings"];
-}) =>
-  generate({
-    reader: args.reader,
-    settings: args.settings,
-  });
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  const appName = ctx.settings.application_name;
+  // ...
+};
 ```
 
 `section?: string` on a patch helper is fine: the section is genuinely optional.

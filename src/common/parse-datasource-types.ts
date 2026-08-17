@@ -6,6 +6,11 @@ export type DatasourceField = {
   type: string;
   isNullable: boolean;
   references?: string;
+  isPrimaryKey?: boolean;
+  minSize?: number;
+  size?: number;
+  hasDefault?: boolean;
+  defaultValue?: unknown;
 };
 
 export type DatasourceType = {
@@ -21,6 +26,10 @@ type YamlField = {
   isNullable: boolean;
   references?: string;
   isPrimaryKey: boolean;
+  minSize?: number;
+  size?: number;
+  hasDefault: boolean;
+  defaultValue?: unknown;
 };
 
 type YamlType = {
@@ -49,11 +58,22 @@ const namedList = (value: unknown): Array<{ name: string; body: unknown }> =>
 
 const readField = (body: unknown): YamlField => {
   const raw = isObject(body) ? body : {};
+  const hasDefault = Object.prototype.hasOwnProperty.call(raw, "default_value");
   return {
     type: typeof raw.type === "string" ? raw.type : undefined,
     isNullable: raw.is_nullable === true,
     references: typeof raw.references === "string" ? raw.references : undefined,
     isPrimaryKey: raw.primary_key === true,
+    minSize:
+      typeof raw.min_size === "number" && Number.isFinite(raw.min_size)
+        ? raw.min_size
+        : undefined,
+    size:
+      typeof raw.size === "number" && Number.isFinite(raw.size)
+        ? raw.size
+        : undefined,
+    hasDefault,
+    defaultValue: hasDefault ? raw.default_value : undefined,
   };
 };
 
@@ -118,6 +138,22 @@ export const parseDatasourceTypes = (args: {
       type: fieldType(field, byName, args.idType),
       isNullable: field.isNullable,
       references: field.references,
+      ...(field.isPrimaryKey ? { isPrimaryKey: true } : {}),
+      ...(field.minSize !== undefined ? { minSize: field.minSize } : {}),
+      ...(field.size !== undefined ? { size: field.size } : {}),
+      ...(field.hasDefault
+        ? { hasDefault: true, defaultValue: field.defaultValue }
+        : {}),
     })),
   }));
 };
+
+export const loadDatasourceTypes = async (
+  reader: { read: (name: string) => Promise<string> },
+  idType: string,
+): Promise<DatasourceType[]> =>
+  parseDatasourceTypes({
+    yaml: await reader.read(DATASOURCE_TYPES_YAML),
+    idType,
+  });
+

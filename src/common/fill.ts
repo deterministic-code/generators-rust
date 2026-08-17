@@ -1,10 +1,15 @@
-export const fill = (
-  text: string,
-  tokens: Record<string, string>,
-): string =>
-  text.replace(/\{\{(\w+)\}\}/g, (_match: string, key: string) => {
-    if (!(key in tokens)) {
-      throw new Error(`Unresolved placeholder: {{${key}}}`);
-    }
-    return tokens[key];
+import { readFile } from "node:fs/promises";
+import Mustache from "mustache";
+
+/** Values Mustache interpolates or uses as sections (`{{#fields}}` / `{{#simpleDoc}}`). */
+export type FillTokens = Record<string, unknown>;
+
+export const fill = (text: string, tokens: FillTokens): string =>
+  Mustache.render(text, tokens, undefined, {
+    escape: (value) => String(value),
   });
+
+export const fillFile = async (
+  path: string | URL,
+  tokens: FillTokens,
+): Promise<string> => fill(await readFile(path, "utf8"), tokens);

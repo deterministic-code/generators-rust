@@ -4,6 +4,10 @@
   "description": "Rust generator pack for the deterministic toolchain: the emit-*-rust lane modules and the deterministic runtime crate.",
   "type": "module",
   "exports": {
+    "./generate-context": {
+      "types": "./dist/generate-context.d.ts",
+      "import": "./dist/generate-context.js"
+    },
     "./*": {
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js"
@@ -19,15 +23,17 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R src/templates dist/",
     "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "test": "node --experimental-strip-types --test src/generate-backend-app.integration.test.ts src/generate-datasource-types.integration.test.ts src/common/parse-datasource-types.test.ts"
+    "test": "node --experimental-strip-types --test src/generate-backend-app.integration.test.ts src/generate-datasource-types.integration.test.ts src/generate-datasource-types-tests.integration.test.ts src/generate-datasource-type-validators.integration.test.ts src/common/parse-datasource-types.test.ts"
   },
   "dependencies": {
     "@deterministic-code/generator-sdk": "github:deterministic-code/generators-common",
     "@deterministic-code/patch-merger": "github:deterministic-code/patch-merger",
     "change-case": "^5.4.4",
+    "mustache": "^4.2.0",
     "yaml": "^2.6.0"
   },
   "devDependencies": {
+    "@types/mustache": "^4.2.6",
     "@types/node": "^22.10.0",
     "typescript": "^5.8.0",
     "vitest": "^2.1.0"

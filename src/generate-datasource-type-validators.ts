@@ -1,5 +1,222 @@
-import { createGenerator } from "./generate-datasource-validator.ts";
-import { makeDatasourceGenerate } from "@deterministic-code/generator-sdk/codegen/lib/datasource-generate-config";
+import { snakeCase } from "change-case";
+import {
+  datasourceSettings,
+  type DatasourceSettings,
+} from "./common/datasource-settings.ts";
+import { fill } from "./common/fill.ts";
+import type { GenerateContext, SettingsDict } from "./common/generate-context.ts";
+import { content, type GenerateEntry } from "./common/generate-entry.ts";
+import { rustNaming, type ArtifactNaming } from "./common/naming.ts";
+import {
+  loadDatasourceTypes,
+  type DatasourceField,
+  type DatasourceType,
+} from "./common/parse-datasource-types.ts";
+import { settingsStr } from "./common/settings.ts";
+import { isFiniteInt, isFiniteNumber } from "./common/yaml-entry.ts";
+import { typeTmpl } from "./datasource-type-validators/resources.ts";
+import { systemColumnsInjectedFor } from "./system-columns.ts";
 
-/** Self-describing generate for the rust datasource-type validators — wraps the shared `generate-datasource-validator` render via `makeDatasourceGenerate`. */
-export const generate = makeDatasourceGenerate(createGenerator, "rust");
+type EmitOptions = {
+  ds: DatasourceSettings;
+  naming: ArtifactNaming;
+  schemaVersion: string;
+};
+
+const SYSTEM: Record<string, DatasourceField> = {
+  id: { name: "id", type: "number", isNullable: false },
+  uuid: { name: "uuid", type: "uuid", isNullable: false },
+  created: { name: "created", type: "datetime", isNullable: false },
+  updated: { name: "updated", type: "datetime", isNullable: false },
+};
+
+const INT_SUFFIX: Record<string, string> = {
+  number: "i64",
+  biginteger: "i64",
+  reference: "i64",
+  integer: "i32",
+  smallinteger: "i16",
+};
+
+const ID_SUFFIX: Record<string, string> = {
+  i32: "i32",
+  i64: "i64",
+  integer: "i64",
+  biginteger: "i64",
+};
+
+const emitOptions = (settings: SettingsDict): EmitOptions => ({
+  ds: datasourceSettings(settings),
+  naming: rustNaming(settings),
+  schemaVersion: settingsStr(settings, "codegen.schema_version") ?? "1.0",
+});
+
+const errIf = (cond: string, msg: string): string =>
+  `if ${cond} { errors.push("${msg}".to_string()); }`;
+
+const guard = (rows: Array<[boolean, string, string]>): string[] =>
+  rows.flatMap(([ok, cond, msg]) => (ok ? [errIf(cond, msg)] : []));
+
+const floatLit = (n: number): string => {
+  const s = String(n);
+  return s.includes(".") ? `${s}f64` : `${s}.0f64`;
+};
+
+const uuidChecks = (prop: string, ref: string): string[] => [
+  `let hex_dashes = ${ref}.len() == 36 && ${ref}.chars().enumerate().all(|(i, c)| if i == 8 || i == 13 || i == 18 || i == 23 { c == '-' } else { c.is_ascii_hexdigit() });`,
+  `if !hex_dashes { errors.push("${prop}: must be a uuid".to_string()); }`,
+];
+
+const rawChecks = (
+  field: DatasourceField,
+  prop: string,
+  ref: string,
+  idType: string,
+): string[] => {
+  const { type, name, minSize, size, references } = field;
+  switch (type) {
+    case "string":
+    case "character":
+      return guard([
+        [
+          isFiniteInt(minSize) && minSize! >= 0,
+          `${ref}.chars().count() < ${minSize}`,
+          `${prop}: must be at least ${minSize} chars`,
+        ],
+        [
+          isFiniteInt(size) && size! >= 0,
+          `${ref}.chars().count() > ${size}`,
+          `${prop}: exceeds ${size} chars`,
+        ],
+      ]);
+    case "uuid":
+      return uuidChecks(prop, ref);
+    case "number":
+    case "integer":
+    case "smallinteger":
+    case "biginteger":
+    case "reference": {
+      const suffix = name === "id" ? ID_SUFFIX[idType] : INT_SUFFIX[type];
+      const idLike =
+        name === "id" ||
+        name.endsWith("_id") ||
+        (typeof references === "string" && references.length > 0);
+      return guard([
+        [idLike, `${ref} < 0${suffix}`, `${prop}: must be nonnegative`],
+        [
+          !idLike && isFiniteInt(minSize),
+          `${ref} < ${minSize}${suffix}`,
+          `${prop}: must be at least ${minSize}`,
+        ],
+        [
+          isFiniteInt(size),
+          `${ref} > ${size}${suffix}`,
+          `${prop}: exceeds ${size}`,
+        ],
+      ]);
+    }
+    case "float":
+      return guard([
+        [
+          isFiniteNumber(minSize),
+          `${ref} < ${floatLit(minSize!)}`,
+          `${prop}: must be at least ${minSize}`,
+        ],
+        [
+          isFiniteNumber(size),
+          `${ref} > ${floatLit(size!)}`,
+          `${prop}: exceeds ${size}`,
+        ],
+      ]);
+    default:
+      return [];
+  }
+};
+
+const pad = (n: number, line: string): string => `${"    ".repeat(n)}${line}`;
+
+const checksForField = (
+  field: DatasourceField,
+  opts: EmitOptions,
+  isStandardId = false,
+): string[] => {
+  const prop = opts.naming.fieldName(field.name);
+  const { idType } = opts.ds;
+  if (isStandardId) {
+    if (idType === "string") return [];
+    if (idType === "uuid") {
+      return uuidChecks(prop, `obj.${prop}.to_string()`).map((l) => pad(1, l));
+    }
+    return [
+      pad(1, errIf(`obj.${prop} < 0${ID_SUFFIX[idType]}`, `${prop}: must be nonnegative`)),
+    ];
+  }
+  const stringLike = field.type === "string" || field.type === "uuid";
+  const ref = field.isNullable ? (stringLike ? "v" : "*v") : `obj.${prop}`;
+  const inner = rawChecks(field, prop, ref, idType);
+  if (inner.length === 0) return [];
+  if (!field.isNullable) return inner.map((l) => pad(1, l));
+  return [
+    pad(1, `if let Some(v) = &obj.${prop} {`),
+    ...inner.map((l) => pad(2, l)),
+    pad(1, `}`),
+  ];
+};
+
+const standardLines = (table: DatasourceType, opts: EmitOptions): string[] => {
+  const injected = systemColumnsInjectedFor({
+    datasource_type: table.datasourceType,
+    fields: table.fields.map((f) => ({
+      [f.name]: f.isPrimaryKey ? { primary_key: true } : {},
+    })),
+  });
+  return (["id", "uuid", "created", "updated"] as const)
+    .filter((n) => injected.has(n) && (n !== "uuid" || opts.ds.withUuidColumn))
+    .flatMap((n) => checksForField(SYSTEM[n], opts, n === "id"));
+};
+
+const validatorPath = (entity: string, naming: ArtifactNaming): string =>
+  naming.byFeature
+    ? naming.filePath(entity).replace(/\.rs$/, "_validator.rs")
+    : `datasource_${naming.fileBase(entity)}_validator.rs`;
+
+const typePath = (entity: string, naming: ArtifactNaming): string => {
+  const cls = naming.className(entity);
+  if (!naming.byFeature) return `crate::types::generated::datasource::${cls}`;
+  const module = naming
+    .filePath(entity)
+    .replace(/\.rs$/, "")
+    .replace(/^features\//, "")
+    .replaceAll("/", "::");
+  return `crate::features::${module}::${cls}`;
+};
+
+const renderValidator = (
+  table: DatasourceType,
+  opts: EmitOptions,
+): GenerateEntry => {
+  const lines = [
+    ...standardLines(table, opts),
+    ...table.fields.flatMap((field) => checksForField(field, opts)),
+  ];
+  const has = lines.length > 0;
+  return content(
+    validatorPath(table.name, opts.naming),
+    fill(typeTmpl, {
+      schemaVersion: opts.schemaVersion,
+      fnName: `validate_datasource_${snakeCase(table.name)}`,
+      paramName: has ? "obj" : "_obj",
+      typePath: typePath(table.name, opts.naming),
+      declared: has ? "let mut errors" : "let errors",
+      checks: lines.map((line) => ({ line })),
+    }),
+  );
+};
+
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  const opts = emitOptions(ctx.settings);
+  const types = await loadDatasourceTypes(ctx.reader, opts.ds.idType);
+  return types.map((table) => renderValidator(table, opts));
+};

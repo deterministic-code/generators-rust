@@ -14,7 +14,7 @@ import {
   datasourceSettingsFor,
   type DatasourceOptions,
 } from "@deterministic-code/generator-sdk/codegen/lib/ts-datasource-settings";
-import { entryOf } from "@deterministic-code/generator-sdk/generator-shared";
+import { entryOf } from "./common/yaml-entry.ts";
 import type { NamesForOptions } from "@deterministic-code/generator-sdk/codegen/lib/ts-codegen-naming";
 
 type Flatten<T> = { [K in keyof T]: T[K] };

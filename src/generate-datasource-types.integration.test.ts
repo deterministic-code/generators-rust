@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "./common/deterministic-reader.ts";
 import { DATASOURCE_TYPES_YAML } from "./common/parse-datasource-types.ts";
-import {
-  generate,
-  type GenerateEntry,
-} from "./generate-datasource-types.ts";
+import type { GenerateEntry } from "./common/generate-entry.ts";
+import { generate } from "./generate-datasource-types.ts";
 
 const FIXTURE_YAML = `types:
   - user:
@@ -51,7 +49,7 @@ const requireEntry = (
   return entry;
 };
 
-describe("generateDatasourceTypes", () => {
+describe("generate", () => {
   it("rejects a missing datasource_types.yaml", async () => {
     await assert.rejects(
       () =>
