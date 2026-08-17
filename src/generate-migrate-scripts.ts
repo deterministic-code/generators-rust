@@ -17,7 +17,7 @@ import {
   rustDialectUpDispatchBlock,
   rustDialectRollbackFnsBlock,
   rustDialectDownDispatchBlock,
-} from "./generate-backend-app.ts";
+} from "./backend-app/dialects.ts";
 import {
   dbFilePatches,
   entrypointPatch,

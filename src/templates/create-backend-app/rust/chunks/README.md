@@ -1,1 +1,1 @@
-Source fragments loaded via `chunk-loader.mjs`. Not standalone-compilable.
+Source fragments composed into migrate runners. Not standalone-compilable.

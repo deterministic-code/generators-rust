@@ -1,0 +1,12 @@
+---
+description: Pack-local shared helpers live in src/common, one copy per language pack.
+alwaysApply: true
+---
+
+# src/common
+
+Helpers used by more than one generator in this pack go in `src/common/` (e.g. `src/common/deterministic-reader.ts`, `src/common/generate-context.ts`, `src/common/fill.ts`, `src/common/generate-entry.ts`). Each language pack keeps its own copy — do not introduce a cross-repo package for these.
+
+Import as `./common/deterministic-reader.ts` (or `../common/...` from a nested file). Do not inline the same helper in each generator, and do not put new files under `src/sdk/`.
+
+`generate` on every lane takes `GenerateContext`: `{ reader, settings }` where `reader` is an `IDeterministicReader` and `settings` is the flat string dict (`application_name`, …).

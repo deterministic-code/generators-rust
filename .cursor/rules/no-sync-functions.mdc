@@ -1,0 +1,11 @@
+---
+description: Do not use synchronous Node APIs or sync helper functions.
+globs: **/*.ts
+alwaysApply: true
+---
+
+# No sync functions
+
+Use async I/O and async helpers. Do not call Node `*Sync` APIs (`readFileSync`, `writeFileSync`, `existsSync`, `mkdirSync`, `readdirSync`, `statSync`, `accessSync`, and the rest).
+
+Load module-level resources with top-level `await` (and `Promise.all` when reading several files). Do not add new sync wrappers to avoid `async`.

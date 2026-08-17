@@ -19,11 +19,13 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R src/templates dist/",
     "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "test": "vitest run"
+    "test": "node --experimental-strip-types --test src/generate-backend-app.integration.test.ts src/generate-datasource-types.integration.test.ts src/common/parse-datasource-types.test.ts"
   },
   "dependencies": {
     "@deterministic-code/generator-sdk": "github:deterministic-code/generators-common",
-    "@deterministic-code/patch-merger": "github:deterministic-code/patch-merger"
+    "@deterministic-code/patch-merger": "github:deterministic-code/patch-merger",
+    "change-case": "^5.4.4",
+    "yaml": "^2.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

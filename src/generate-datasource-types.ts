@@ -1,116 +1,86 @@
-import { DEFAULT_COMMENT_STYLE } from "@deterministic-code/generator-sdk/generate-doc-comment";
-import { datasourceTypesGenerator } from "@deterministic-code/generator-sdk/codegen-context";
-import { rustInjectedSystemFields } from "./rust-standard-columns.ts";
-import { datasourceTypesModule } from "@deterministic-code/generator-sdk/codegen/lib/generate-settings-options";
-import { createTypeMapper } from "@deterministic-code/generator-sdk/codegen/lib/type-mapper";
-import { datasourceSettingsFor } from "@deterministic-code/generator-sdk/codegen/lib/ts-datasource-settings";
-import { datasourceTypeDoc } from "@deterministic-code/generator-sdk/codegen/lib/datasource-types-generate-types";
-import type {
-  DatasourceField,
-  GenerateCtx,
-  GeneratedFile,
-  NormalizedTable,
-} from "@deterministic-code/generator-sdk/codegen/lib/datasource-types-generate-types";
+import { datasourceSettings } from "./common/datasource-settings.ts";
+import type { IDeterministicReader } from "./common/deterministic-reader.ts";
+import { commentStyle, renderDocComment } from "./common/doc-comment.ts";
+import type { GenerateContext } from "./common/generate-context.ts";
+import { content, type GenerateEntry } from "./common/generate-entry.ts";
+import { rustNaming } from "./common/naming.ts";
+import { settingsStr } from "./common/settings.ts";
+import { convertSpecType } from "./common/type-converter.ts";
+import { systemColumnsInjectedFor } from "./system-columns.ts";
 
-interface RawFieldDef {
-  type: string;
-  is_nullable?: boolean;
-}
+export type { GenerateEntry };
 
-interface RawTableDef {
-  datasource_type?: string;
-  fields: Array<Record<string, RawFieldDef>>;
-}
+const SYSTEM = {
+  id: { type: "number", isNullable: false },
+  uuid: { type: "uuid", isNullable: false },
+  created: { type: "datetime", isNullable: false },
+  updated: { type: "datetime", isNullable: false },
+} as const;
 
-interface RustGenerateOptions {
-  baseClass: null;
-  schemaVersion: string;
-  style: unknown;
-  idType?: string;
-  datetime?: string;
-  withUuidColumn?: boolean;
-}
-
-type RustCtx = GenerateCtx<RustGenerateOptions>;
-
-export const DEFAULT_GENERATE_OPTIONS: RustGenerateOptions = {
-  baseClass: null,
-  schemaVersion: "1.0",
-  style: DEFAULT_COMMENT_STYLE,
-};
-
-export const mapRustType = createTypeMapper("rust");
-
-/** The rust type for an id column. Delegates the `settings.datasource.id_type` cases to the shared `DatasourceSettings` owner; the leading guard passes a raw `i32` rust type through (the SDK owner only knows settings id_types, not rust primitives). */
-export function normalizeIdType(idType: string | undefined): string {
-  if (idType === "i32") return "i32";
-  return datasourceSettingsFor({ idType }).rustIdType();
-}
-
-function mapType(
-  field: DatasourceField,
-  idType: string | undefined,
-  datetime: string | undefined,
-): string {
-  if (field.name === "id") return normalizeIdType(idType);
-  return mapRustType(field.type, { datetime });
-}
-
-function normalizeTable(entry: Record<string, RawTableDef>): NormalizedTable {
-  const [name, def] = Object.entries(entry)[0];
-  const declared: DatasourceField[] = def.fields.map((f) => {
-    const [fname, fdef] = Object.entries(f)[0];
-    return {
-      name: fname,
-      type: fdef.type,
-      isNullable: fdef.is_nullable === true,
-    };
-  });
-  return {
-    name,
-    datasourceType: def.datasource_type,
-    fields: [...rustInjectedSystemFields(def), ...declared],
-  };
-}
-
-function generateField(field: DatasourceField, ctx: RustCtx): string {
-  const rustType = mapType(field, ctx.opts.idType, ctx.opts.datetime);
-  const wrapped = field.isNullable ? `Option<${rustType}>` : rustType;
-  return `    pub ${ctx.fields.name(field.name)}: ${wrapped},`;
-}
-
-function renderTable(table: NormalizedTable, ctx: RustCtx): GeneratedFile {
-  const { names, opts, layout } = ctx;
-  const structName = names.className(table.name);
-  const path = layout.filePath(table.name, "datasource-type");
-  const withUuidColumn =
-    datasourceSettingsFor(opts).withUuidColumn && opts.withUuidColumn;
-  const fields = withUuidColumn
-    ? table.fields
-    : table.fields.filter((f) => f.name !== "uuid");
-  const body = fields.map((f) => generateField(f, ctx)).join("\n");
-
-  const doc = datasourceTypeDoc({
-    className: structName,
-    datasourceType: table.datasourceType,
-    fieldCount: fields.length,
-    style: opts.style,
-    language: "rust",
-  });
-
-  const content = `// schema-version: ${opts.schemaVersion}
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  const ds = datasourceSettings(ctx.settings);
+  const naming = rustNaming(ctx.settings);
+  const schemaVersion =
+    settingsStr(ctx.settings, "codegen.schema_version") ?? "1.0";
+  const style = commentStyle(settingsStr(ctx.settings, "comments"));
+  const tables = await ctx.reader.loadDatasourceTypes(ds.idType);
+  return tables.map((table) => {
+    const injected = systemColumnsInjectedFor({
+      datasource_type: table.datasourceType,
+      fields: table.fields.map((f) => ({ [f.name]: {} })),
+    });
+    const declared = new Set(table.fields.map((f) => f.name));
+    const system = (["id", "uuid", "created", "updated"] as const)
+      .filter(
+        (n) =>
+          injected.has(n) &&
+          !declared.has(n) &&
+          (n !== "uuid" || ds.withUuidColumn),
+      )
+      .map((name) => ({ name, ...SYSTEM[name] }));
+    const fields = [...system, ...table.fields].filter(
+      (f) => ds.withUuidColumn || f.name !== "uuid",
+    );
+    const structName = naming.className(table.name);
+    const body = fields
+      .map((f) => {
+        const t =
+          f.name === "id"
+            ? ds.rustIdType
+            : convertSpecType(f.type, ds.datetimeRepr);
+        const wrapped = f.isNullable ? `Option<${t}>` : t;
+        return `    pub ${naming.fieldName(f.name)}: ${wrapped},`;
+      })
+      .join("\n");
+    const doc = renderDocComment({
+      style,
+      summary: `Type ${structName}.`,
+      lines: [
+        `Datasource type: ${table.datasourceType}.`,
+        `Target: StandardCrud.`,
+        `Fields: ${fields.length}.`,
+      ],
+      language: "rust",
+    });
+    return content(
+      naming.filePath(table.name),
+      `// schema-version: ${schemaVersion}
 ${doc}#[derive(Clone, Debug, PartialEq)]
 pub struct ${structName} {
 ${body}
 }
-`;
-  return { path, content };
-}
+`,
+    );
+  });
+};
 
-const baseGenerate = datasourceTypesGenerator(normalizeTable, renderTable)();
-
-export const { render, createGenerator, generate } = datasourceTypesModule({
-  baseGenerate,
-  defaultGenerateOptions: DEFAULT_GENERATE_OPTIONS,
-  language: "rust",
-});
+export const generateDatasourceTypes = async (args: {
+  reader: IDeterministicReader;
+  settings: GenerateContext["settings"];
+}): Promise<GenerateEntry[]> =>
+  generate({
+    reader: args.reader,
+    settings: args.settings,
+  });

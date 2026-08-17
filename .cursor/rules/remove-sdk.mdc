@@ -1,0 +1,15 @@
+---
+description: We are removing the former generator SDK; do not add or keep SDK imports.
+alwaysApply: true
+---
+
+# Removing the SDK
+
+The language generator packs no longer depend on `@deterministic-code/generator-sdk` or a vendored SDK copy. That SDK is being deleted.
+
+When changing a generator:
+
+- Do not import from `@deterministic-code/generator-sdk`.
+- Inline or relocate only what that generator actually uses into pack-owned modules.
+- Fix one generator at a time. Goal for each file: **zero SDK imports**.
+- Start with `generate-backend-app`, then the rest of the generate entrypoints.
