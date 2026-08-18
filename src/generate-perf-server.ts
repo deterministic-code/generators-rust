@@ -1,66 +1,21 @@
-import { parseDatasourceTypes } from "@deterministic-code/generator-sdk/codegen/lib/parse-datasource-types";
-import { join } from "node:path";
-import { CONTENT } from "@deterministic-code/generator-sdk/codegen/lib/generate-result";
-import {
-  makeGenerate,
-  type GenerateContext,
-} from "@deterministic-code/generator-sdk/codegen/lib/make-generate";
-import { perfServerRustEntries } from "@deterministic-code/generator-sdk/codegen/lib/migrate-perf-harness";
-import type { GeneratedFile } from "@deterministic-code/generator-sdk/codegen/lib/routes-generate-types";
+import type { GenerateContext } from "./common/generate-context.ts";
+import { content, patch, type GenerateEntry } from "./common/generate-entry.ts";
+import { DATASOURCE_TYPES_YAML } from "./common/parse-datasource-types.ts";
+import { serverTmpl } from "./resources/perf-server.ts";
 
-interface DatasourceData {
-  types?: unknown;
-}
-
-interface PerfServerRustContext extends GenerateContext {
-  inputs: { all: () => Promise<{ datasourceYamlText: string }> };
-}
-
-export function generatePerfServerRust({
-  datasourceData,
-}: { datasourceData?: DatasourceData } = {}): GeneratedFile {
-  if (!datasourceData || typeof datasourceData !== "object") {
-    throw new Error(
-      "generatePerfServerRust: datasourceData is required (parsed datasource_types.yaml)",
-    );
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  if (!(await ctx.reader.exists(DATASOURCE_TYPES_YAML))) {
+    throw new Error("generate-perf-server: datasource_types.yaml is required");
   }
-  if (!Array.isArray(datasourceData.types)) {
-    throw new Error(
-      "generatePerfServerRust: datasourceData.types must be an array — malformed datasource_types.yaml",
-    );
-  }
-
-  const content = `use deterministic::run::{run, RunConfig};
-
-#[tokio::main]
-async fn main() {
-    if let Err(err) = run(RunConfig::from_env()).await {
-        eprintln!("perf-server: {err}");
-        std::process::exit(1);
-    }
-}
-`;
-
-  return { path: "perf_server.rs", content };
-}
-
-/** The perf_server.rs bin lives under src/bin, outside the crate's mod.rs graph — so no rust module wiring. */
-export const rustModuleWiring = false;
-
-/** Self-describing catalog `perf_server` (rust): the perf-server bin plus its Cargo.toml `[[bin]]` marked-block patch. `--output` is the crate root, so the bin self-encodes its `src/bin/` path and the Cargo.toml patch lands at the root — no artifact-root knob. */
-export const generate = makeGenerate(
-  async ({ inputs, settings }: PerfServerRustContext) => {
-    const { datasourceYamlText } = await inputs.all();
-    const file = generatePerfServerRust({
-      datasourceData: parseDatasourceTypes(datasourceYamlText, settings),
-    });
-    return [
-      {
-        kind: CONTENT,
-        filename: join("src", "bin", file.path),
-        contents: file.content,
-      },
-      ...perfServerRustEntries(),
-    ];
-  },
-);
+  await ctx.reader.read(DATASOURCE_TYPES_YAML);
+  return [
+    content("src/bin/perf_server.rs", serverTmpl),
+    patch(
+      "Cargo.toml",
+      '[[bin]]\nname = "perf_server"\npath = "src/bin/perf_server.rs"',
+      "PERF_BIN",
+    ),
+  ];
+};

@@ -1,53 +1,7 @@
-import {
-  generateServiceIntegrationTestsFiles,
-  dispatchServiceIntegrationTestsStep,
-  servicesStepGenerate,
-  type GeneratedFile,
-  type ServiceTestsGenerateConfig,
-} from "@deterministic-code/generator-sdk/codegen/lib/services-generate";
+import type { GenerateContext } from "./common/generate-context.ts";
+import type { GenerateEntry } from "./common/generate-entry.ts";
 
-interface IntegrationTestCandidate {
-  name: string;
-  kind: string;
-}
-
-interface RustGenerateOptions {
-  servicePath?: string | null;
-  fileFormat?: string;
-  datetime?: string;
-}
-
-export const DEFAULT_GENERATE_OPTIONS = {
-  servicePath: null,
-  fileFormat: "Snake",
-  datetime: "string",
-} as const;
-
-// Retired tier: per-entity service integration tests built services via the removed `::new` API and drove them against a repo directly (facades need a full app/registry). Generates nothing.
-export function generateGenericServiceIntegrationTest(
-  _candidate: IntegrationTestCandidate,
-  _opts: RustGenerateOptions = DEFAULT_GENERATE_OPTIONS,
-): GeneratedFile | null {
-  return null;
-}
-
-export const generate = (ctx: unknown) =>
-  servicesStepGenerate(
-    {
-      dispatchStep: dispatchServiceIntegrationTestsStep,
-      generator: { createGenerator },
-      language: "rust",
-    },
-    ctx,
-  );
-
-export const createGenerator = () => ({
-  generate: (config: ServiceTestsGenerateConfig) =>
-    generateServiceIntegrationTestsFiles({
-      ...config,
-      primitives: {
-        generateGenericServiceIntegrationTest,
-        defaultGenerateOptions: DEFAULT_GENERATE_OPTIONS,
-      },
-    }),
-});
+/** Retired: integration tests used the removed `::new` API. */
+export const generate = async (
+  _ctx: GenerateContext,
+): Promise<GenerateEntry[]> => [];
