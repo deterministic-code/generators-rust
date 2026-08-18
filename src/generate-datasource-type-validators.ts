@@ -18,7 +18,7 @@ import {
   intLiteralSuffix,
 } from "./common/type-converter.ts";
 import { isFiniteInt, isFiniteNumber } from "./common/yaml-entry.ts";
-import { typeTmpl } from "./datasource-type-validators/resources.ts";
+import { typeTmpl } from "./resources/datasource-type-validators.ts";
 import { systemColumnsInjectedFor } from "./system-columns.ts";
 
 type EmitOptions = {

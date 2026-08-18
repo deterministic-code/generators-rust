@@ -26,7 +26,7 @@ import {
   crudPlainTmpl,
   readonlyByFieldsTmpl,
   readonlyPlainTmpl,
-} from "./routes/resources.ts";
+} from "./resources/routes.ts";
 import { serviceFieldName } from "./rust-eager-service-graph.ts";
 
 type Field = {

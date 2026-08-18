@@ -10,7 +10,7 @@ import {
   gitignore,
   libRs,
   mainRs,
-} from "./backend-app/resources.ts";
+} from "./resources/backend-app.ts";
 
 const DEFAULT_APP_NAME = "generated-app";
 

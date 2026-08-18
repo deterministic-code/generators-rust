@@ -21,7 +21,7 @@ import {
 } from "./common/parse-view-types.ts";
 import { settingsStr } from "./common/settings.ts";
 import { convertSpecType } from "./common/type-converter.ts";
-import { typeTestTmpl } from "./view-types-tests/resources.ts";
+import { typeTestTmpl } from "./resources/view-types-tests.ts";
 
 type EmitOptions = {
   ds: DatasourceSettings;
