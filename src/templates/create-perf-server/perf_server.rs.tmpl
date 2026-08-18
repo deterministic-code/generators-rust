@@ -1,0 +1,9 @@
+use deterministic::run::{run, RunConfig};
+
+#[tokio::main]
+async fn main() {
+    if let Err(err) = run(RunConfig::from_env()).await {
+        eprintln!("perf-server: {err}");
+        std::process::exit(1);
+    }
+}
