@@ -1,13 +1,15 @@
-import type {
-  GeneratedFile,
-  ServiceTestsGenerateConfig,
-} from "@deterministic-code/generator-sdk/codegen/lib/service-tests-generate-types";
-import type { IntegrationTestCandidate } from "@deterministic-code/generator-sdk/codegen/lib/service-integration-tests-generate-types";
 import {
   generateServiceIntegrationTestsFiles,
   dispatchServiceIntegrationTestsStep,
   servicesStepGenerate,
+  type GeneratedFile,
+  type ServiceTestsGenerateConfig,
 } from "@deterministic-code/generator-sdk/codegen/lib/services-generate";
+
+interface IntegrationTestCandidate {
+  name: string;
+  kind: string;
+}
 
 interface RustGenerateOptions {
   servicePath?: string | null;

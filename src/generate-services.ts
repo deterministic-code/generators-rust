@@ -12,7 +12,7 @@ import {
   type CustomServiceEntry,
   type ServiceCandidate,
 } from "./common/parse-services.ts";
-import { customStubTmpl, genericTmpl } from "./services/resources.ts";
+import { customStubTmpl, genericTmpl } from "./resources/services.ts";
 
 const STATUS_OK_DEFAULTS: Record<string, Record<string, string>> = {
   HealthCheckService: {

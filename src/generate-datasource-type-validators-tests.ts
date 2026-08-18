@@ -16,7 +16,7 @@ import {
   type DatasourceType,
 } from "./common/parse-datasource-types.ts";
 import { settingsStr } from "./common/settings.ts";
-import { typeTestTmpl } from "./datasource-type-validators-tests/resources.ts";
+import { typeTestTmpl } from "./resources/datasource-type-validators-tests.ts";
 
 type EmitOptions = {
   ds: DatasourceSettings;

@@ -1,11 +1,9 @@
-import type {
-  GeneratedFile,
-  ServiceTestsGenerateConfig,
-} from "@deterministic-code/generator-sdk/codegen/lib/service-tests-generate-types";
 import {
   generateServiceTestsFiles,
   dispatchServiceTestsStep,
   servicesStepGenerate,
+  type GeneratedFile,
+  type ServiceTestsGenerateConfig,
 } from "@deterministic-code/generator-sdk/codegen/lib/services-generate";
 
 interface RustTestCandidate {
