@@ -1,0 +1,14 @@
+// schema-version: {{schemaVersion}}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use {{&typeUse}};
+
+{{#cases}}
+    #[test]
+    fn {{ident}}() {
+        let value = {{&fixture}};
+        assert!({{fnName}}(&value).{{assertion}});
+    }
+{{/cases}}
+}

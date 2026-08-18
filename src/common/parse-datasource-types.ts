@@ -1,5 +1,6 @@
 import { parse } from "yaml";
 import { referenceFieldShape } from "./datasource-settings.ts";
+import { isRecord, namedEntries } from "./yaml-entry.ts";
 
 export type DatasourceField = {
   name: string;
@@ -7,6 +8,7 @@ export type DatasourceField = {
   isNullable: boolean;
   references?: string;
   isPrimaryKey?: boolean;
+  isUnique?: boolean;
   minSize?: number;
   size?: number;
   hasDefault?: boolean;
@@ -17,6 +19,10 @@ export type DatasourceType = {
   name: string;
   datasourceType: string;
   fields: DatasourceField[];
+  /** Single-column unique index field names (from `indexes:`). */
+  uniqueIndexFields: string[];
+  target?: string | null;
+  optimisticConcurrency?: boolean;
 };
 
 export const DATASOURCE_TYPES_YAML = "datasource_types.yaml";
@@ -26,6 +32,7 @@ type YamlField = {
   isNullable: boolean;
   references?: string;
   isPrimaryKey: boolean;
+  isUnique: boolean;
   minSize?: number;
   size?: number;
   hasDefault: boolean;
@@ -34,7 +41,10 @@ type YamlField = {
 
 type YamlType = {
   datasourceType?: string;
+  target?: string | null;
+  optimisticConcurrency?: boolean;
   fields: Array<{ name: string } & YamlField>;
+  uniqueIndexFields: string[];
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -56,6 +66,15 @@ const namedList = (value: unknown): Array<{ name: string; body: unknown }> =>
       })
     : [];
 
+const singleColumnUniqueIndexField = (body: unknown): string | undefined => {
+  const raw = isObject(body) ? body : {};
+  if (raw.is_unique !== true) return undefined;
+  const fields = raw.fields;
+  if (!Array.isArray(fields) || fields.length !== 1) return undefined;
+  const only = fields[0];
+  return typeof only === "string" && only.length > 0 ? only : undefined;
+};
+
 const readField = (body: unknown): YamlField => {
   const raw = isObject(body) ? body : {};
   const hasDefault = Object.prototype.hasOwnProperty.call(raw, "default_value");
@@ -64,6 +83,7 @@ const readField = (body: unknown): YamlField => {
     isNullable: raw.is_nullable === true,
     references: typeof raw.references === "string" ? raw.references : undefined,
     isPrimaryKey: raw.primary_key === true,
+    isUnique: raw.is_unique === true,
     minSize:
       typeof raw.min_size === "number" && Number.isFinite(raw.min_size)
         ? raw.min_size
@@ -79,9 +99,25 @@ const readField = (body: unknown): YamlField => {
 
 const readType = (body: unknown): YamlType => {
   const raw = isObject(body) ? body : {};
+  const uniqueIndexFields: string[] = [];
+  for (const [, indexBody] of namedEntries(raw.indexes)) {
+    const field = singleColumnUniqueIndexField(indexBody);
+    if (field !== undefined && !uniqueIndexFields.includes(field)) {
+      uniqueIndexFields.push(field);
+    }
+  }
+  const hasOcc = Object.prototype.hasOwnProperty.call(
+    raw,
+    "use_optimistic_concurrency",
+  );
   return {
     datasourceType:
       typeof raw.datasource_type === "string" ? raw.datasource_type : undefined,
+    target: raw.target === null ? null : typeof raw.target === "string" ? raw.target : undefined,
+    optimisticConcurrency: hasOcc
+      ? raw.use_optimistic_concurrency === true
+      : undefined,
+    uniqueIndexFields,
     fields: namedList(raw.fields).map(({ name, body }) => ({
       name,
       ...readField(body),
@@ -133,12 +169,18 @@ export const parseDatasourceTypes = (args: {
   return types.map((t) => ({
     name: t.name,
     datasourceType: t.datasourceType ?? "standard",
+    uniqueIndexFields: t.uniqueIndexFields,
+    ...(t.target !== undefined ? { target: t.target } : {}),
+    ...(t.optimisticConcurrency !== undefined
+      ? { optimisticConcurrency: t.optimisticConcurrency }
+      : {}),
     fields: t.fields.map((field) => ({
       name: field.name,
       type: fieldType(field, byName, args.idType),
       isNullable: field.isNullable,
       references: field.references,
       ...(field.isPrimaryKey ? { isPrimaryKey: true } : {}),
+      ...(field.isUnique ? { isUnique: true } : {}),
       ...(field.minSize !== undefined ? { minSize: field.minSize } : {}),
       ...(field.size !== undefined ? { size: field.size } : {}),
       ...(field.hasDefault
@@ -146,6 +188,27 @@ export const parseDatasourceTypes = (args: {
         : {}),
     })),
   }));
+};
+
+/** Unique lookup columns: `is_unique` fields plus single-column unique indexes. */
+export const uniqueLookupFields = (
+  type: DatasourceType,
+): Array<{ field: string; type: string; size?: number }> => {
+  const out: Array<{ field: string; type: string; size?: number }> = [];
+  const add = (name: string) => {
+    if (out.some((e) => e.field === name)) return;
+    const f = type.fields.find((x) => x.name === name);
+    out.push({
+      field: name,
+      type: f?.type ?? "string",
+      ...(f?.size !== undefined ? { size: f.size } : {}),
+    });
+  };
+  for (const f of type.fields) {
+    if (f.isUnique) add(f.name);
+  }
+  for (const name of type.uniqueIndexFields) add(name);
+  return out;
 };
 
 export const loadDatasourceTypes = async (
@@ -156,4 +219,3 @@ export const loadDatasourceTypes = async (
     yaml: await reader.read(DATASOURCE_TYPES_YAML),
     idType,
   });
-

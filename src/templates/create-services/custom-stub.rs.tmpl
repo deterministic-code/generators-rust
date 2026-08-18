@@ -1,0 +1,54 @@
+use async_trait::async_trait;
+{{#useJsonMacro}}
+use serde_json::{json, Value};
+{{/useJsonMacro}}
+{{^useJsonMacro}}
+use serde_json::Value;
+{{/useJsonMacro}}
+
+use deterministic::services::{DynamicService, ServiceError};
+
+pub struct {{structName}};
+
+impl {{structName}} {
+    pub fn new() -> Self {
+        Self
+    }
+{{#hasMethods}}
+{{#methods}}
+
+    async fn {{rustFn}}(&self, _args: Value) -> Result<Value, ServiceError> {
+        {{body}}
+    }
+{{/methods}}
+{{/hasMethods}}
+}
+
+impl Default for {{structName}} {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl DynamicService for {{structName}} {
+    async fn invoke(&self, method: &str, {{argsParam}}: Value) -> Result<Value, ServiceError> {
+{{#hasMethods}}
+        match method {
+{{#invokeArms}}
+            "{{method}}" => self.{{rustFn}}(args).await,
+{{/invokeArms}}
+            _ => Err(ServiceError::UnknownMethod(format!(
+                "{{structName}}.{}",
+                method
+            ))),
+        }
+{{/hasMethods}}
+{{^hasMethods}}
+        Err(ServiceError::UnknownMethod(format!(
+            "{{structName}}.{}",
+            method
+        )))
+{{/hasMethods}}
+    }
+}

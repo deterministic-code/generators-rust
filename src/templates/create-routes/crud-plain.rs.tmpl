@@ -1,0 +1,31 @@
+use std::sync::Arc;
+
+{{{serviceImport}}}
+use deterministic::routes::{create_crud_router, CrudRouterConfig, IdType};
+use deterministic::RowMap;
+{{#hasCoercion}}
+use serde_json::Value;
+{{/hasCoercion}}
+
+pub fn router(service: Arc<{{className}}>) -> axum::Router {
+    create_crud_router(CrudRouterConfig {
+        service: service,
+        entity_name: "{{entitySnake}}".to_string(),
+        base_path: "{{path}}".to_string(),
+        id_type: IdType::{{idTypeVariant}},
+        primary_key_param: {{{primaryKeyParamExpr}}},
+        use_optimistic_concurrency: {{useOptimisticConcurrency}},
+        create_validator: Some(Arc::new(|body: &RowMap| validate_create_{{entitySnake}}(body))),
+        update_validator: Some(Arc::new(|body: &RowMap| validate_update_{{entitySnake}}(body))),
+        patch_validator: None,
+        coerce_row: {{{coerceRowExpr}}},
+        enrich_items: None,
+        enrich_item: None,
+        resolve_item: None,
+    })
+}
+
+{{{createValidator}}}
+
+{{{updateValidator}}}
+{{{coerceFn}}}

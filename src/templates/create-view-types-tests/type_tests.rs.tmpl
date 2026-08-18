@@ -1,0 +1,46 @@
+// schema-version: {{schemaVersion}}
+#[cfg(test)]
+mod tests {
+    use super::{{fileBase}}::*;
+
+{{#isShaped}}
+    fn sample() -> {{structName}} {
+        {{&fixture}}
+    }
+
+{{#fields}}
+    #[test]
+    fn gets_{{ident}}() {
+        let initial = {{&sampleExpr}};
+        let mut value = sample();
+        value.{{ident}} = initial.clone();
+        assert_eq!(value.{{ident}}, initial);
+    }
+
+    #[test]
+    fn sets_{{ident}}() {
+        let mut value = sample();
+        let next = {{&nextExpr}};
+        value.{{ident}} = next.clone();
+        assert_eq!(value.{{ident}}, next);
+    }
+{{#nullable}}
+    #[test]
+    fn allows_setting_{{ident}}_to_none() {
+        let mut value = sample();
+        value.{{ident}} = None;
+        assert!(value.{{ident}}.is_none());
+    }
+{{/nullable}}
+{{/fields}}
+{{/isShaped}}
+{{#isUnion}}
+{{#members}}
+    #[test]
+    fn accepts_{{ident}}_member() {
+        let value = {{&memberExpr}};
+        let _ok: {{structName}} = value;
+    }
+{{/members}}
+{{/isUnion}}
+}

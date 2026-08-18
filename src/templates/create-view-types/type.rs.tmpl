@@ -1,0 +1,22 @@
+// schema-version: {{schemaVersion}}
+#[allow(unused_imports)]
+use super::*;
+{{#simpleDoc}}/// View {{structName}}.
+{{/simpleDoc}}{{#descriptionDoc}}/// View {{structName}}.
+/// Datasource type: {{datasourceType}}.
+/// Target: {{target}}.
+/// Fields: {{fieldCount}}.
+{{/descriptionDoc}}{{#isAlias}}pub type {{structName}} = {{&aliasType}};
+{{/isAlias}}{{#isUnion}}#[derive(Clone, Debug, PartialEq)]
+pub enum {{structName}} {
+{{#members}}
+    {{variant}}({{&memberType}}),
+{{/members}}
+}
+{{/isUnion}}{{#isStruct}}#[derive(Clone, Debug, PartialEq)]
+pub struct {{structName}} {
+{{#fields}}
+    pub {{ident}}: {{&rustType}},
+{{/fields}}
+}
+{{/isStruct}}

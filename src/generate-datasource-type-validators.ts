@@ -13,6 +13,10 @@ import {
   type DatasourceType,
 } from "./common/parse-datasource-types.ts";
 import { settingsStr } from "./common/settings.ts";
+import {
+  idTypeLiteralSuffix,
+  intLiteralSuffix,
+} from "./common/type-converter.ts";
 import { isFiniteInt, isFiniteNumber } from "./common/yaml-entry.ts";
 import { typeTmpl } from "./datasource-type-validators/resources.ts";
 import { systemColumnsInjectedFor } from "./system-columns.ts";
@@ -28,21 +32,6 @@ const SYSTEM: Record<string, DatasourceField> = {
   uuid: { name: "uuid", type: "uuid", isNullable: false },
   created: { name: "created", type: "datetime", isNullable: false },
   updated: { name: "updated", type: "datetime", isNullable: false },
-};
-
-const INT_SUFFIX: Record<string, string> = {
-  number: "i64",
-  biginteger: "i64",
-  reference: "i64",
-  integer: "i32",
-  smallinteger: "i16",
-};
-
-const ID_SUFFIX: Record<string, string> = {
-  i32: "i32",
-  i64: "i64",
-  integer: "i64",
-  biginteger: "i64",
 };
 
 const emitOptions = (settings: SettingsDict): EmitOptions => ({
@@ -96,7 +85,8 @@ const rawChecks = (
     case "smallinteger":
     case "biginteger":
     case "reference": {
-      const suffix = name === "id" ? ID_SUFFIX[idType] : INT_SUFFIX[type];
+      const suffix =
+        name === "id" ? idTypeLiteralSuffix(idType) : intLiteralSuffix(type);
       const idLike =
         name === "id" ||
         name.endsWith("_id") ||
@@ -148,7 +138,13 @@ const checksForField = (
       return uuidChecks(prop, `obj.${prop}.to_string()`).map((l) => pad(1, l));
     }
     return [
-      pad(1, errIf(`obj.${prop} < 0${ID_SUFFIX[idType]}`, `${prop}: must be nonnegative`)),
+      pad(
+        1,
+        errIf(
+          `obj.${prop} < 0${idTypeLiteralSuffix(idType)}`,
+          `${prop}: must be nonnegative`,
+        ),
+      ),
     ];
   }
   const stringLike = field.type === "string" || field.type === "uuid";

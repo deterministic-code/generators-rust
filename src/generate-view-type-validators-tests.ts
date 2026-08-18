@@ -1,3 +1,4 @@
+import { snakeCase } from "change-case";
 import {
   datasourceSettings,
   nativeFieldType,
@@ -21,7 +22,7 @@ import {
 } from "./common/parse-view-types.ts";
 import { settingsStr } from "./common/settings.ts";
 import { convertSpecType } from "./common/type-converter.ts";
-import { typeTestTmpl } from "./view-types-tests/resources.ts";
+import { typeTestTmpl } from "./view-type-validators-tests/resources.ts";
 
 type EmitOptions = {
   ds: DatasourceSettings;
@@ -34,8 +35,13 @@ type EmitOptions = {
 type FieldTok = {
   ident: string;
   sampleExpr: string;
-  nextExpr: string;
   nullable: boolean;
+};
+
+type CaseTok = {
+  ident: string;
+  fixture: string;
+  assertion: string;
 };
 
 const emitBase = (settings: SettingsDict) => ({
@@ -159,7 +165,6 @@ const parentToks = (view: ShapedView, opts: EmitOptions): FieldTok[] => {
       return {
         ident: opts.naming.fieldName(f.name),
         sampleExpr: f.isNullable ? `Some(${pair.sample})` : pair.sample,
-        nextExpr: f.isNullable ? `Some(${pair.next})` : pair.next,
         nullable: f.isNullable,
       };
     });
@@ -170,23 +175,20 @@ const viewFieldTok = (
   opts: EmitOptions,
   visited: Set<string>,
 ): FieldTok => {
-  let pair: { sample: string; next: string };
+  let sample: string;
   if (field.kind === "primitive") {
-    pair = samplesForNative(
+    sample = samplesForNative(
       convertSpecType(field.base, opts.ds.datetimeRepr),
       field.base,
-    );
+    ).sample;
   } else if (field.kind === "datasource") {
-    const expr = renderDs(field.base, opts);
-    pair = { sample: expr, next: expr };
+    sample = renderDs(field.base, opts);
   } else {
-    const expr = renderViewExpr(field.base, opts, visited);
-    pair = { sample: expr, next: expr };
+    sample = viewFixture(field.base, opts, visited);
   }
   return {
     ident: opts.naming.fieldName(field.name),
-    sampleExpr: wrapValue(pair.sample, field),
-    nextExpr: wrapValue(pair.next, field),
+    sampleExpr: wrapValue(sample, field),
     nullable: field.isNullable,
   };
 };
@@ -202,37 +204,26 @@ const shapedToks = (
   if (view.inherits === null) return declared;
   if (alias || inline) return [...parentToks(view, opts), ...declared];
   const base = renderDs(view.inherits, opts);
-  return [
-    { ident: "base", sampleExpr: base, nextExpr: base, nullable: false },
-    ...declared,
-  ];
+  return [{ ident: "base", sampleExpr: base, nullable: false }, ...declared];
 };
 
-const renderViewExpr = (
+const viewFixture = (
   name: string,
   opts: EmitOptions,
   visited: Set<string>,
 ): string => {
-  if (visited.has(name)) throw new Error(`cyclic view reference: ${name}`);
+  if (visited.has(name)) return "{}";
   const view = opts.views.get(name);
-  if (view === undefined) throw new Error(`unknown view: ${name}`);
+  if (view === undefined) return "{}";
   const next = new Set(visited).add(name);
   if (view.kind === "union") {
     const member = view.members[0];
     if (member === undefined) return `${qual(name, "view", opts.naming)} {}`;
-    return `${qual(name, "view", opts.naming)}::${opts.naming.className(member)}(${renderViewExpr(member, opts, next)})`;
+    return `${qual(name, "view", opts.naming)}::${opts.naming.className(member)}(${viewFixture(member, opts, next)})`;
   }
-  const body = shapedToks(view, opts, next)
-    .map((t) => `${t.ident}: ${t.sampleExpr}`)
-    .join(", ");
-  return `${qual(name, "view", opts.naming)} { ${body} }`;
-};
-
-const fixtureExpr = (view: ShapedView, opts: EmitOptions, fields: FieldTok[]) => {
   const cls = opts.naming.className(view.name);
-  if (fields.length === 0) return `${cls} {}`;
-  const lines = fields.map((f) => `            ${f.ident}: ${f.sampleExpr},`);
-  return `${cls} {\n${lines.join("\n")}\n        }`;
+  const fields = shapedToks(view, opts, next);
+  return `${cls} { ${fields.map((f) => `${f.ident}: ${f.sampleExpr}`).join(", ")} }`;
 };
 
 const testPath = (entity: string, naming: ArtifactNaming): string => {
@@ -242,32 +233,44 @@ const testPath = (entity: string, naming: ArtifactNaming): string => {
   return `${typeFile.slice(0, typeFile.lastIndexOf("/"))}/__tests__/${file}`;
 };
 
-const renderTests = (view: ViewType, opts: EmitOptions): GenerateEntry => {
-  const fields =
-    view.kind === "shaped"
-      ? shapedToks(view, opts, new Set([view.name]))
-      : [];
-  return content(
+const shapedCases = (view: ShapedView, opts: EmitOptions): CaseTok[] => {
+  const fields = shapedToks(view, opts, new Set([view.name]));
+  const cls = opts.naming.className(view.name);
+  const valid = `${cls} { ${fields.map((f) => `${f.ident}: ${f.sampleExpr}`).join(", ")} }`;
+  const cases: CaseTok[] = [
+    { ident: "parses_a_valid_payload", fixture: valid, assertion: "is_ok()" },
+  ];
+  if (fields.some((f) => f.nullable)) {
+    cases.push({
+      ident: "accepts_none_for_nullable_fields",
+      fixture: `${cls} { ${fields.map((f) => `${f.ident}: ${f.nullable ? "None" : f.sampleExpr}`).join(", ")} }`,
+      assertion: "is_ok()",
+    });
+  }
+  return cases;
+};
+
+const unionCases = (
+  view: Extract<ViewType, { kind: "union" }>,
+  opts: EmitOptions,
+): CaseTok[] =>
+  view.members.map((name) => ({
+    ident: `accepts_${opts.naming.fieldName(name)}_member`,
+    fixture: `${opts.naming.className(view.name)}::${opts.naming.className(name)}(${viewFixture(name, opts, new Set([view.name]))})`,
+    assertion: "is_ok()",
+  }));
+
+const renderTests = (view: ViewType, opts: EmitOptions): GenerateEntry =>
+  content(
     testPath(view.name, opts.naming),
     fill(typeTestTmpl, {
       schemaVersion: opts.schemaVersion,
-      structName: opts.naming.className(view.name),
-      fileBase: opts.naming.fileBase(view.name),
-      isShaped: view.kind === "shaped",
-      isUnion: view.kind === "union",
-      fixture:
-        view.kind === "shaped" ? fixtureExpr(view, opts, fields) : "",
-      fields,
-      members:
-        view.kind === "union"
-          ? view.members.map((name) => ({
-              ident: opts.naming.fieldName(name),
-              memberExpr: `${opts.naming.className(view.name)}::${opts.naming.className(name)}(${renderViewExpr(name, opts, new Set([view.name]))})`,
-            }))
-          : [],
+      typeUse: qual(view.name, "view", opts.naming),
+      fnName: `validate_${snakeCase(view.name)}`,
+      cases:
+        view.kind === "union" ? unionCases(view, opts) : shapedCases(view, opts),
     }),
   );
-};
 
 export const generate = async (
   ctx: GenerateContext,

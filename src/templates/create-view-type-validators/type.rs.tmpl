@@ -1,0 +1,20 @@
+// schema-version: {{schemaVersion}}
+{{#isUnion}}pub fn {{fnName}}(obj: &{{&typePath}}) -> Result<(), Vec<String>> {
+    match obj {
+{{#arms}}
+        {{&arm}}
+{{/arms}}
+    }
+}
+{{/isUnion}}{{#isShaped}}pub fn {{fnName}}({{paramName}}: &{{&typePath}}) -> Result<(), Vec<String>> {
+{{#hasChecks}}
+    let mut errors: Vec<String> = Vec::new();
+{{#checks}}
+{{&line}}
+{{/checks}}
+    if errors.is_empty() { Ok(()) } else { Err(errors) }
+{{/hasChecks}}{{^hasChecks}}
+    Ok(())
+{{/hasChecks}}
+}
+{{/isShaped}}

@@ -1,13 +1,6 @@
 import type { SettingsDict } from "./generate-context.ts";
-import { settingsStr } from "./settings.ts";
-import { convertSpecType } from "./type-converter.ts";
-
-const ID_RUST: Record<string, string> = {
-  integer: "i64",
-  biginteger: "i64",
-  uuid: "uuid::Uuid",
-  string: "String",
-};
+import { settingsBool, settingsStr } from "./settings.ts";
+import { convertSpecType, idTypeToNative } from "./type-converter.ts";
 
 const REFERENCE_SHAPE: Record<string, { type: string; size: number | undefined }> =
   {
@@ -22,6 +15,7 @@ export type DatasourceSettings = {
   datetimeRepr: string;
   withUuidColumn: boolean;
   rustIdType: string;
+  useOptimisticConcurrency: boolean;
 };
 
 export const datasourceSettings = (
@@ -32,7 +26,11 @@ export const datasourceSettings = (
     idType,
     datetimeRepr: settingsStr(settings, "datasource.datetime") ?? "native",
     withUuidColumn: idType !== "uuid",
-    rustIdType: idType === "i32" ? "i32" : (ID_RUST[idType] ?? "i64"),
+    rustIdType: idTypeToNative(idType),
+    useOptimisticConcurrency: settingsBool(
+      settings,
+      "datasource.use_optimistic_concurrency",
+    ),
   };
 };
 
