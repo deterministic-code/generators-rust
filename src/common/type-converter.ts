@@ -18,6 +18,32 @@ const NATIVE: Record<string, string> = {
   reference: "i64",
 };
 
+/** `datasource.id_type` → Rust id type. */
+const ID_NATIVE: Record<string, string> = {
+  integer: "i64",
+  biginteger: "i64",
+  uuid: "uuid::Uuid",
+  string: "String",
+  i32: "i32",
+};
+
+/** Spec integer-like type → literal suffix used in validator comparisons. */
+const INT_LITERAL_SUFFIX: Record<string, string> = {
+  number: "i64",
+  biginteger: "i64",
+  reference: "i64",
+  integer: "i32",
+  smallinteger: "i16",
+};
+
+/** `datasource.id_type` → literal suffix for id comparisons. */
+const ID_LITERAL_SUFFIX: Record<string, string> = {
+  i32: "i32",
+  i64: "i64",
+  integer: "i64",
+  biginteger: "i64",
+};
+
 export const convertSpecType = (
   specType: string,
   datetimeRepr: string,
@@ -27,3 +53,12 @@ export const convertSpecType = (
   if (!native) throw new Error(`Unknown spec field type: ${specType}`);
   return native;
 };
+
+export const idTypeToNative = (idType: string): string =>
+  ID_NATIVE[idType] ?? ID_NATIVE.integer;
+
+export const intLiteralSuffix = (specType: string): string | undefined =>
+  INT_LITERAL_SUFFIX[specType];
+
+export const idTypeLiteralSuffix = (idType: string): string | undefined =>
+  ID_LITERAL_SUFFIX[idType];

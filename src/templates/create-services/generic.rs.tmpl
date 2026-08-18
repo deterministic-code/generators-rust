@@ -1,0 +1,77 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use serde_json::Value;
+
+use deterministic::repositories::RowMap;
+use deterministic::routes::adapt;
+use deterministic::services::{DynamicService, ServiceError};
+use deterministic::{ComposeContext, RepositoryError};
+
+pub struct {{structName}} {
+    inner: Arc<dyn DynamicService>,
+}
+
+impl {{structName}} {
+    pub fn from_context(ctx: &ComposeContext) -> Result<Self, RepositoryError> {
+        Ok(Self {
+            inner: ctx.entity_service({{entitySnakeLiteral}})?,
+        })
+    }
+}
+
+#[async_trait]
+impl DynamicService for {{structName}} {
+    async fn invoke(&self, method: &str, args: Value) -> Result<Value, ServiceError> {
+        self.inner.invoke(method, args).await
+    }
+}
+
+#[async_trait]
+impl deterministic::routes::CrudService for {{structName}} {
+    async fn find_all(&self) -> Result<Vec<RowMap>, RepositoryError> {
+        adapt::find_all(self.inner.as_ref()).await
+    }
+    async fn find(&self, id: &Value) -> Result<Option<RowMap>, RepositoryError> {
+        adapt::find(self.inner.as_ref(), id).await
+    }
+    async fn add(&self, body: RowMap) -> Result<RowMap, RepositoryError> {
+        adapt::add(self.inner.as_ref(), body).await
+    }
+    async fn update(
+        &self,
+        id: &Value,
+        body: RowMap,
+        expected_updated: Option<&str>,
+    ) -> Result<Option<RowMap>, RepositoryError> {
+        adapt::update(self.inner.as_ref(), id, body, expected_updated).await
+    }
+    async fn delete(
+        &self,
+        id: &Value,
+        expected_updated: Option<&str>,
+    ) -> Result<bool, RepositoryError> {
+        adapt::delete(self.inner.as_ref(), id, expected_updated).await
+    }
+}
+
+#[async_trait]
+impl deterministic::routes::ReadOnlyService for {{structName}} {
+    async fn find_all(&self) -> Result<Vec<RowMap>, RepositoryError> {
+        adapt::find_all(self.inner.as_ref()).await
+    }
+    async fn find(&self, id: &Value) -> Result<Option<RowMap>, RepositoryError> {
+        adapt::find(self.inner.as_ref(), id).await
+    }
+}
+
+#[async_trait]
+impl deterministic::routes::ByFieldService for {{structName}} {
+    async fn find_by(
+        &self,
+        field: &str,
+        value: &Value,
+    ) -> Result<Vec<RowMap>, RepositoryError> {
+        adapt::find_by(self.inner.as_ref(), field, value).await
+    }
+}

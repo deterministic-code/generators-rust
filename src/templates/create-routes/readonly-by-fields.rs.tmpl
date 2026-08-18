@@ -1,0 +1,16 @@
+use std::sync::Arc;
+
+{{{serviceImport}}}
+use deterministic::routes::{create_by_field_router, create_read_only_router, ByFieldRouterConfig, IdType, ReadOnlyRouterConfig};
+
+pub fn router(service: Arc<{{className}}>) -> axum::Router {
+    create_read_only_router(ReadOnlyRouterConfig {
+        service: service.clone(),
+        entity_name: "{{entitySnake}}".to_string(),
+        base_path: "{{path}}".to_string(),
+        id_type: IdType::{{idTypeVariant}},
+        enrich_items: None,
+        enrich_item: None,
+    })
+{{{byFieldMerges}}}
+}

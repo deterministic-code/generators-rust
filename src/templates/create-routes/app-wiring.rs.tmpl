@@ -1,0 +1,10 @@
+use deterministic::{ComposeContext, RepositoryError};
+{{#imports}}
+{{{.}}}
+{{/imports}}
+
+/// Builds each generated service facade from the ComposeContext and merges the generated router that
+/// routes to it — the live source of truth for CRUD, enrich, and eager behavior (all from the runtime).
+pub fn compose_router(ctx: &ComposeContext) -> Result<axum::Router, RepositoryError> {
+{{{body}}}
+}

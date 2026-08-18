@@ -1,153 +1,124 @@
+import pluralize from "pluralize";
+import { datasourceSettings } from "./common/datasource-settings.ts";
+import { fill } from "./common/fill.ts";
+import type { GenerateContext, SettingsDict } from "./common/generate-context.ts";
+import { content, type GenerateEntry } from "./common/generate-entry.ts";
 import {
-  generateRoutesFiles,
-  dispatchRoutesStep,
-  routesStepGenerate,
-} from "@deterministic-code/generator-sdk/codegen/lib/routes-generate";
+  rustRouteNaming,
+  type RouteNaming,
+} from "./common/naming.ts";
 import {
-  rustLayout,
-  serviceUseLine,
-  routeModulePath,
-  appWiringFilePath,
-} from "./rust-crate-paths.ts";
+  entityUsesOptimisticConcurrency,
+  loadRoutes,
+  type NestedRouteDescriptor,
+  type RouteByField,
+  type RouteCandidate,
+} from "./common/parse-routes.ts";
+import type { DatasourceField, DatasourceType } from "./common/parse-datasource-types.ts";
+import {
+  loadViewTypes,
+  type ViewEnrichment,
+  type ViewType,
+} from "./common/parse-view-types.ts";
+import {
+  appWiringTmpl,
+  crudByFieldsTmpl,
+  crudPlainTmpl,
+  readonlyByFieldsTmpl,
+  readonlyPlainTmpl,
+} from "./routes/resources.ts";
 import { serviceFieldName } from "./rust-eager-service-graph.ts";
-import { entityUsesOptimisticConcurrency } from "@deterministic-code/generator-sdk/lib/generate-sql";
-import {
-  namesFor,
-  layoutFor,
-  type NamesForOptions,
-} from "@deterministic-code/generator-sdk/codegen/lib/ts-codegen-naming";
-import type { CodegenLayout } from "@deterministic-code/generator-sdk/codegen-layout";
-import type {
-  GeneratedFile,
-  RoutesGenerateConfig,
-} from "@deterministic-code/generator-sdk/codegen/lib/routes-generate-types";
 
-interface Field {
+type Field = {
   name: string;
   type: string;
   isNullable?: boolean;
   hasDefault?: boolean;
-}
+};
 
-interface Enrichment {
+type Enrichment = {
   targetTable: string;
   fkColumn: string;
   newField: string;
   prefix?: string;
-}
+};
 
-interface EagerChild {
+type EagerChild = {
   fieldName: string;
   fkColumn: string;
   childTable: string;
   kind?: string;
-}
+};
 
-interface PrimaryKey {
+type PrimaryKey = {
   column: string;
   idType?: string;
   rustType?: string;
-}
+};
 
-interface NormalizedByField {
+type NormalizedByField = {
   byField: string;
   unique: boolean;
-}
+};
 
-interface RustRouteOpts {
-  byFeature: boolean;
-  layout: CodegenLayout;
-  idTypeVariant?: string;
-}
-
-interface RustGenerateOptions extends NamesForOptions {
-  requiredFields?: Field[];
-  allFields?: Field[];
-  useOptimisticConcurrency?: boolean;
-}
-
-interface RustRouteCandidate {
-  name: string;
-  primaryKey?: PrimaryKey;
-  fields?: Field[];
-  enrichments?: Enrichment[];
-  eagerWriteChildren?: EagerChild[];
-  byFields?: unknown;
-  datasourceType?: string;
-  optimisticConcurrency?: boolean;
-}
-
-interface EnrichHooks {
-  enrichItems: string;
-  enrichItem: string;
-  resolveItem: string;
-}
-
-interface ValidatorFnArgs {
-  fnName: string;
-  requiredFields: Field[];
-  requireAll: boolean;
-  directFkChildren: EagerChild[];
-}
-
-interface CrudRouterArgs {
-  name: string;
-  requiredFields: Field[];
-  enrichments: Enrichment[];
-  allFields: Field[];
-  primaryKey: PrimaryKey;
-  eagerWriteChildren: EagerChild[];
-  byFields: unknown;
-  opts: RustRouteOpts;
+type EmitOptions = {
+  naming: RouteNaming;
+  idType: string;
+  rustIdType: string;
   useOptimisticConcurrency: boolean;
-}
+  views: ViewType[];
+  datasources: DatasourceType[];
+  nested: NestedRouteDescriptor[];
+};
 
-interface CrudRouterCtx {
-  entitySnake: string;
-  className: string;
-  serviceImport: string;
-  path: string;
-  normalizedByFields: NormalizedByField[];
-  hasByFields: boolean;
-  hasCoercion: boolean;
-  opts: RustRouteOpts;
-  useOptimisticConcurrency: boolean;
-  coerceFn: string;
-  createValidator: string;
-  updateValidator: string;
-  idTypeVariant: string;
-  primaryKeyParamExpr: string;
-  coerceRowExpr: string;
-}
+const emitOptions = async (
+  settings: SettingsDict,
+  reader: GenerateContext["reader"],
+  nested: NestedRouteDescriptor[],
+  datasources: DatasourceType[],
+): Promise<EmitOptions> => {
+  const ds = datasourceSettings(settings);
+  const hasViews = await reader.exists("view_types.yaml");
+  const views = hasViews ? await loadViewTypes(reader) : [];
+  return {
+    naming: rustRouteNaming(settings),
+    idType: ds.idType,
+    rustIdType: ds.rustIdType,
+    useOptimisticConcurrency: ds.useOptimisticConcurrency,
+    views,
+    datasources,
+    nested,
+  };
+};
 
-const names = namesFor({ language: "rust" });
-const layout = layoutFor({ language: "rust" });
+const pluralSnakeField = (entity: string): string => {
+  const parts = entity.split(/[_-]/);
+  parts[parts.length - 1] = pluralize.plural(parts[parts.length - 1]!);
+  return parts.join("_");
+};
 
-// byField path mounts at /api/<plural-kebab>/<field-kebab>/{<field_snake>}. methods are GET-only on the Rust side: the service trait exposes find_by but not update_by/delete_by, so PUT/DELETE-by-byField would require a repo-layer port and are deferred to a follow-up.
-function normalizeByFields(byFields: unknown): NormalizedByField[] {
-  if (!Array.isArray(byFields)) return [];
-  return byFields
+const normalizeByFields = (byFields: RouteByField[]): NormalizedByField[] =>
+  byFields
     .map((e): NormalizedByField | null => {
-      if (!e || typeof e.byField !== "string" || e.byField.length === 0)
-        return null;
+      if (!e.byField) return null;
       const methods = Array.isArray(e.methods)
-        ? e.methods.filter((m: string) => m === "GET")
+        ? e.methods.filter((m) => m === "GET")
         : ["GET"];
       if (methods.length === 0) return null;
       return { byField: e.byField, unique: e.byFieldUnique === true };
     })
     .filter((e): e is NormalizedByField => e !== null);
-}
 
-function byFieldPrimitiveCall(
+const byFieldPrimitiveCall = (
   entitySnake: string,
+  apiPath: string,
   entry: NormalizedByField,
   hasCoercion: boolean,
-): string {
+): string => {
   const coerceExpr = hasCoercion
     ? "Some(Arc::new(|row: &mut RowMap| coerce_row_types(row)))"
     : "None";
-  const path = `/api/${layout.apiPath(entitySnake)}`;
+  const path = `/api/${apiPath}`;
   return `create_by_field_router(ByFieldRouterConfig {
         service: service.clone(),
         entity_name: "${entitySnake}".to_string(),
@@ -158,21 +129,22 @@ function byFieldPrimitiveCall(
         coerce_row: ${coerceExpr},
         update_validator: None,
     })`;
-}
+};
 
-function byFieldMergeChain(
+const byFieldMergeChain = (
   entitySnake: string,
+  apiPath: string,
   normalizedByFields: NormalizedByField[],
   hasCoercion: boolean,
-): string {
-  return normalizedByFields
+): string =>
+  normalizedByFields
     .map(
-      (e) => `    .merge(${byFieldPrimitiveCall(entitySnake, e, hasCoercion)})`,
+      (e) =>
+        `    .merge(${byFieldPrimitiveCall(entitySnake, apiPath, e, hasCoercion)})`,
     )
     .join("\n");
-}
 
-function fieldTypeCheck(type: string): string | null {
+const fieldTypeCheck = (type: string): string | null => {
   switch (type) {
     case "string":
     case "uuid":
@@ -188,9 +160,9 @@ function fieldTypeCheck(type: string): string | null {
     default:
       return null;
   }
-}
+};
 
-function buildEagerChildShapeCheck(child: EagerChild): string {
+const buildEagerChildShapeCheck = (child: EagerChild): string => {
   const name = child.fieldName;
   return `    match body.get(${JSON.stringify(name)}) {
         None => {}
@@ -206,9 +178,9 @@ function buildEagerChildShapeCheck(child: EagerChild): string {
             _ => errors.push("${name}: expected array".to_string()),
         }
     }`;
-}
+};
 
-function requiredFieldCheck(f: Field, requireAll: boolean): string {
+const requiredFieldCheck = (f: Field, requireAll: boolean): string => {
   const typeCheck = fieldTypeCheck(f.type);
   const present = `body.get("${f.name}").filter(|v| !v.is_null())`;
   if (requireAll) {
@@ -227,45 +199,38 @@ function requiredFieldCheck(f: Field, requireAll: boolean): string {
     }`;
   }
   return "";
-}
+};
 
-function buildValidatorFn({
-  fnName,
-  requiredFields,
-  requireAll,
-  directFkChildren,
-}: ValidatorFnArgs): string {
-  const requiredChecks = requiredFields
-    .map((f) => requiredFieldCheck(f, requireAll))
+const buildValidatorFn = (args: {
+  fnName: string;
+  requiredFields: Field[];
+  requireAll: boolean;
+  directFkChildren: EagerChild[];
+}): string => {
+  const requiredChecks = args.requiredFields
+    .map((f) => requiredFieldCheck(f, args.requireAll))
     .filter((s) => s.length > 0);
-
-  const childShapeChecks = Array.isArray(directFkChildren)
-    ? directFkChildren.map(buildEagerChildShapeCheck)
-    : [];
-
+  const childShapeChecks = args.directFkChildren.map(buildEagerChildShapeCheck);
   const checks = [...requiredChecks, ...childShapeChecks].join("\n");
-
   if (checks.length === 0) {
-    return `fn ${fnName}(_body: &RowMap) -> Result<(), Vec<String>> { Ok(()) }`;
+    return `fn ${args.fnName}(_body: &RowMap) -> Result<(), Vec<String>> { Ok(()) }`;
   }
-
-  return `fn ${fnName}(body: &RowMap) -> Result<(), Vec<String>> {
+  return `fn ${args.fnName}(body: &RowMap) -> Result<(), Vec<String>> {
     let mut errors: Vec<String> = Vec::new();
 ${checks}
     if errors.is_empty() { Ok(()) } else { Err(errors) }
 }`;
-}
+};
 
-function applyEnrichmentToRequiredFields(
+const applyEnrichmentToRequiredFields = (
   requiredFields: Field[],
   enrichments: Enrichment[],
-): Field[] {
-  if (!enrichments || enrichments.length === 0) return requiredFields;
+): Field[] => {
+  if (enrichments.length === 0) return requiredFields;
   const requiredNames = new Set(requiredFields.map((f) => f.name));
   const fkSet = new Set(enrichments.map((e) => e.fkColumn));
   const out = requiredFields.filter((f) => !fkSet.has(f.name));
   for (const e of enrichments) {
-    // The enriched name is required only when its FK column was itself required (non-nullable); a nullable FK like an optional self-reference (role.parent_role_id) makes the enriched name optional too.
     if (requiredNames.has(e.fkColumn)) {
       out.push({
         name: e.newField,
@@ -276,14 +241,14 @@ function applyEnrichmentToRequiredFields(
     }
   }
   return out;
-}
+};
 
-function generateCoerceRowFn(
+const generateCoerceRowFn = (
   booleanFields: Field[],
   binaryFields: Field[],
-): string {
-  const boolNames = (booleanFields ?? []).map((f) => f.name);
-  const binNames = (binaryFields ?? []).map((f) => f.name);
+): string => {
+  const boolNames = booleanFields.map((f) => f.name);
+  const binNames = binaryFields.map((f) => f.name);
   const boolArr = boolNames.length
     ? `&[${boolNames.map((n) => JSON.stringify(n)).join(", ")}]`
     : "&[]";
@@ -352,21 +317,17 @@ fn base64_encode(bytes: &[u8]) -> String {
     }
     out
 }`;
-}
+};
 
-function partitionFieldsByType(fields: Field[]): {
-  booleanFields: Field[];
-  binaryFields: Field[];
-} {
-  const arr = Array.isArray(fields) ? fields : [];
-  return {
-    booleanFields: arr.filter((f) => f.type === "boolean"),
-    binaryFields: arr.filter((f) => f.type === "binary"),
-  };
-}
+const partitionFieldsByType = (
+  fields: Field[],
+): { booleanFields: Field[]; binaryFields: Field[] } => ({
+  booleanFields: fields.filter((f) => f.type === "boolean"),
+  binaryFields: fields.filter((f) => f.type === "binary"),
+});
 
-function idTypeVariantForPk(primaryKey: PrimaryKey | null | undefined): string {
-  switch (primaryKey?.idType) {
+const idTypeVariantForPk = (primaryKey: PrimaryKey): string => {
+  switch (primaryKey.idType) {
     case "uuid":
       return "Uuid";
     case "string":
@@ -375,362 +336,262 @@ function idTypeVariantForPk(primaryKey: PrimaryKey | null | undefined): string {
     case "biginteger":
       return "Integer";
     default:
-      // PKs generated without an explicit idType (e.g. the services path) fall back to the rust type.
-      return primaryKey?.rustType === "String" ? "String" : "Integer";
+      return primaryKey.rustType === "String" ? "String" : "Integer";
   }
-}
+};
 
-function sortedDirectFkChildren(
+const idTypeFromFieldType = (fieldType: string): string => {
+  if (fieldType === "string") return "string";
+  if (fieldType === "uuid") return "uuid";
+  return "integer";
+};
+
+const inferPrimaryKey = (
+  ds: DatasourceType | undefined,
+  opts: EmitOptions,
+): PrimaryKey => {
+  if (ds !== undefined) {
+    const custom = ds.fields.find(
+      (f) => f.isPrimaryKey === true && f.name !== "id",
+    );
+    if (custom !== undefined) {
+      return {
+        column: custom.name,
+        rustType: custom.type === "number" ? "i64" : "String",
+        idType: idTypeFromFieldType(custom.type),
+      };
+    }
+  }
+  return {
+    column: "id",
+    rustType: opts.rustIdType,
+    idType: opts.idType,
+  };
+};
+
+const sortedDirectFkChildren = (
   eagerWriteChildren: EagerChild[],
-): EagerChild[] {
-  return Array.isArray(eagerWriteChildren)
-    ? eagerWriteChildren
-        .filter((c) => (c.kind ?? "direct-fk") === "direct-fk")
-        .slice()
-        .sort((a, b) => a.fieldName.localeCompare(b.fieldName))
-    : [];
-}
+): EagerChild[] =>
+  eagerWriteChildren
+    .filter((c) => (c.kind ?? "direct-fk") === "direct-fk")
+    .slice()
+    .sort((a, b) => a.fieldName.localeCompare(b.fieldName));
 
-function buildCrudRouterCtx(args: CrudRouterArgs): CrudRouterCtx {
-  const {
-    name,
-    requiredFields,
-    enrichments,
-    allFields,
-    primaryKey,
-    eagerWriteChildren,
-    byFields,
+const enrichmentsForEntity = (
+  entity: string,
+  views: ViewType[],
+): Enrichment[] => {
+  const out: Enrichment[] = [];
+  for (const view of views) {
+    if (view.kind !== "shaped") continue;
+    if (view.inherits !== entity && view.name !== entity) continue;
+    for (const e of view.enrichments as ViewEnrichment[]) {
+      out.push({
+        targetTable: e.targetTable,
+        fkColumn: e.fkColumn,
+        newField: e.newField,
+        prefix: e.prefix,
+      });
+    }
+  }
+  return out;
+};
+
+const eagerWriteChildrenForEntity = (
+  entity: string,
+  nested: NestedRouteDescriptor[],
+): EagerChild[] =>
+  nested
+    .filter(
+      (d): d is Extract<NestedRouteDescriptor, { kind: "direct-fk" }> =>
+        d.kind === "direct-fk" && d.parent === entity,
+    )
+    .map((d) => ({
+      fieldName: pluralSnakeField(d.child.name),
+      fkColumn: d.fkColumn,
+      childTable: d.child.name,
+      kind: "direct-fk",
+    }));
+
+const fieldsForEntity = (
+  entity: string,
+  datasources: DatasourceType[],
+): Field[] => {
+  const ds = datasources.find((d) => d.name === entity);
+  if (ds === undefined) return [];
+  return ds.fields.map((f: DatasourceField) => ({
+    name: f.name,
+    type: f.type,
+    isNullable: f.isNullable,
+    hasDefault: f.hasDefault,
+  }));
+};
+
+const buildCrudValidators = (
+  entitySnake: string,
+  effectiveRequiredFields: Field[],
+  children: EagerChild[],
+): { createValidator: string; updateValidator: string } => ({
+  createValidator: buildValidatorFn({
+    fnName: `validate_create_${entitySnake}`,
+    requiredFields: effectiveRequiredFields,
+    requireAll: true,
+    directFkChildren: children,
+  }),
+  updateValidator: buildValidatorFn({
+    fnName: `validate_update_${entitySnake}`,
+    requiredFields: effectiveRequiredFields,
+    requireAll: false,
+    directFkChildren: children,
+  }),
+});
+
+const renderReadOnly = (
+  candidate: RouteCandidate,
+  opts: EmitOptions,
+): GenerateEntry => {
+  const { naming } = opts;
+  const entitySnake = candidate.name;
+  const className = naming.serviceClassName(entitySnake);
+  const path = `/api/${naming.apiPath(entitySnake)}`;
+  const pk = inferPrimaryKey(
+    opts.datasources.find((d) => d.name === entitySnake),
     opts,
-    useOptimisticConcurrency,
-  } = args;
-  const entitySnake = name;
-  const className = names.className(name, "service");
-  const serviceImport = serviceUseLine(name, className, opts);
-  const path = `/api/${layout.apiPath(name)}`;
-  const normalizedByFields = normalizeByFields(byFields);
+  );
+  const normalizedByFields = normalizeByFields(candidate.byFields);
+  const tokens = {
+    serviceImport: naming.serviceUseLine(entitySnake, className),
+    className,
+    entitySnake,
+    path,
+    idTypeVariant: idTypeVariantForPk(pk),
+    byFieldMerges: byFieldMergeChain(
+      entitySnake,
+      naming.apiPath(entitySnake),
+      normalizedByFields,
+      false,
+    ),
+  };
+  const tmpl =
+    normalizedByFields.length > 0 ? readonlyByFieldsTmpl : readonlyPlainTmpl;
+  return content(naming.filePath(entitySnake), fill(tmpl, tokens));
+};
+
+const renderCrud = (
+  candidate: RouteCandidate,
+  opts: EmitOptions,
+): GenerateEntry => {
+  const { naming } = opts;
+  const entitySnake = candidate.name;
+  const className = naming.serviceClassName(entitySnake);
+  const path = `/api/${naming.apiPath(entitySnake)}`;
+  const allFields = fieldsForEntity(entitySnake, opts.datasources);
+  const enrichments = enrichmentsForEntity(entitySnake, opts.views);
+  const eagerWriteChildren = eagerWriteChildrenForEntity(
+    entitySnake,
+    opts.nested,
+  );
+  const pk = inferPrimaryKey(
+    opts.datasources.find((d) => d.name === entitySnake),
+    opts,
+  );
+  const normalizedByFields = normalizeByFields(candidate.byFields);
   const hasByFields = normalizedByFields.length > 0;
   const directFkChildren = sortedDirectFkChildren(eagerWriteChildren);
   const { booleanFields, binaryFields } = partitionFieldsByType(allFields);
   const hasCoercion = booleanFields.length + binaryFields.length > 0;
-  // Generating the coercion helpers without a caller trips verify's zero-warning cargo contract (dead_code).
   const coerceFn = hasCoercion
     ? `\n\n${generateCoerceRowFn(booleanFields, binaryFields)}`
     : "";
-  const pk = primaryKey ?? { column: "id", rustType: "i64" };
-
   const { createValidator, updateValidator } = buildCrudValidators(
     entitySnake,
-    applyEnrichmentToRequiredFields(requiredFields, enrichments),
+    applyEnrichmentToRequiredFields([], enrichments),
     directFkChildren,
   );
-
-  return {
-    entitySnake,
+  const occ = entityUsesOptimisticConcurrency(
+    {
+      datasourceType: candidate.datasourceType,
+      optimisticConcurrency: candidate.optimisticConcurrency,
+    },
+    opts.useOptimisticConcurrency,
+  );
+  const tokens = {
+    serviceImport: naming.serviceUseLine(entitySnake, className),
     className,
-    serviceImport,
+    entitySnake,
     path,
-    normalizedByFields,
-    hasByFields,
-    hasCoercion,
-    opts,
-    useOptimisticConcurrency: useOptimisticConcurrency === true,
-    coerceFn,
-    createValidator,
-    updateValidator,
     idTypeVariant: idTypeVariantForPk(pk),
     primaryKeyParamExpr:
       pk.column === "id" ? "None" : `Some("${pk.column}".to_string())`,
+    useOptimisticConcurrency: occ ? "true" : "false",
     coerceRowExpr: hasCoercion
       ? "Some(Arc::new(|row: &mut RowMap| coerce_row_types(row)))"
       : "None",
-  };
-}
-
-function buildCrudValidators(
-  entitySnake: string,
-  effectiveRequiredFields: Field[],
-  children: EagerChild[],
-): { createValidator: string; updateValidator: string } {
-  return {
-    createValidator: buildValidatorFn({
-      fnName: `validate_create_${entitySnake}`,
-      requiredFields: effectiveRequiredFields,
-      requireAll: true,
-      directFkChildren: children,
-    }),
-    updateValidator: buildValidatorFn({
-      fnName: `validate_update_${entitySnake}`,
-      requiredFields: effectiveRequiredFields,
-      requireAll: false,
-      directFkChildren: children,
-    }),
-  };
-}
-
-// Always a thin create_crud_router: enrichment + eager write/read live in the composed service stack the facade forwards to, so the router keeps only validation + coercion (no enrich hooks, no lookup params).
-function generateCrudRouterContent(args: CrudRouterArgs): string {
-  return generateCrudRouterPlain(buildCrudRouterCtx(args));
-}
-
-function crudRoutesImport(hasByFields: boolean): string {
-  return hasByFields
-    ? "use deterministic::routes::{create_by_field_router, create_crud_router, ByFieldRouterConfig, CrudRouterConfig, IdType};"
-    : "use deterministic::routes::{create_crud_router, CrudRouterConfig, IdType};";
-}
-
-function crudRouterConfigCall(ctx: CrudRouterCtx, hooks: EnrichHooks): string {
-  const { enrichItems, enrichItem, resolveItem } = hooks;
-  const serviceExpr = ctx.hasByFields ? "service.clone()" : "service";
-  return `create_crud_router(CrudRouterConfig {
-        service: ${serviceExpr},
-        entity_name: "${ctx.entitySnake}".to_string(),
-        base_path: "${ctx.path}".to_string(),
-        id_type: IdType::${ctx.idTypeVariant},
-        primary_key_param: ${ctx.primaryKeyParamExpr},
-        use_optimistic_concurrency: ${ctx.useOptimisticConcurrency ? "true" : "false"},
-        create_validator: Some(Arc::new(|body: &RowMap| validate_create_${ctx.entitySnake}(body))),
-        update_validator: Some(Arc::new(|body: &RowMap| validate_update_${ctx.entitySnake}(body))),
-        patch_validator: None,
-        coerce_row: ${ctx.coerceRowExpr},
-        enrich_items: ${enrichItems},
-        enrich_item: ${enrichItem},
-        resolve_item: ${resolveItem},
-    })`;
-}
-
-function withByFieldChain(ctx: CrudRouterCtx, coreCall: string): string {
-  if (!ctx.hasByFields) return coreCall;
-  return `${coreCall}
-${byFieldMergeChain(ctx.entitySnake, ctx.normalizedByFields, ctx.hasCoercion)}`;
-}
-
-const NO_ENRICH_HOOKS: EnrichHooks = {
-  enrichItems: "None",
-  enrichItem: "None",
-  resolveItem: "None",
-};
-
-function generateCrudRouterPlain(ctx: CrudRouterCtx): string {
-  const primitiveImports = [
-    "use std::sync::Arc;",
-    "",
-    ctx.serviceImport,
-    crudRoutesImport(ctx.hasByFields),
-    "use deterministic::RowMap;",
-    ...(ctx.hasCoercion ? ["use serde_json::Value;"] : []),
-  ].join("\n");
-
-  const routerBody = withByFieldChain(
-    ctx,
-    crudRouterConfigCall(ctx, NO_ENRICH_HOOKS),
-  );
-
-  return `${primitiveImports}
-
-pub fn router(service: Arc<${ctx.className}>) -> axum::Router {
-    ${routerBody}
-}
-
-${ctx.createValidator}
-
-${ctx.updateValidator}
-${ctx.coerceFn}`;
-}
-
-function generateReadOnlyRouterContent(
-  name: string,
-  byFields: unknown,
-  opts: RustRouteOpts,
-): string {
-  const entitySnake = name;
-  const className = names.className(name, "service");
-  const serviceImport = serviceUseLine(name, className, opts);
-  const path = `/api/${layout.apiPath(name)}`;
-  const normalizedByFields = normalizeByFields(byFields);
-  const hasByFields = normalizedByFields.length > 0;
-  const idType = `IdType::${opts.idTypeVariant}`;
-
-  if (!hasByFields) {
-    return `use std::sync::Arc;
-
-${serviceImport}
-use deterministic::routes::{create_read_only_router, IdType, ReadOnlyRouterConfig};
-
-pub fn router(service: Arc<${className}>) -> axum::Router {
-    create_read_only_router(ReadOnlyRouterConfig {
-        service,
-        entity_name: "${entitySnake}".to_string(),
-        base_path: "${path}".to_string(),
-        id_type: ${idType},
-        enrich_items: None,
-        enrich_item: None,
-    })
-}
-`;
-  }
-
-  const byFieldMerges = byFieldMergeChain(name, normalizedByFields, false);
-
-  return `use std::sync::Arc;
-
-${serviceImport}
-use deterministic::routes::{create_by_field_router, create_read_only_router, ByFieldRouterConfig, IdType, ReadOnlyRouterConfig};
-
-pub fn router(service: Arc<${className}>) -> axum::Router {
-    create_read_only_router(ReadOnlyRouterConfig {
-        service: service.clone(),
-        entity_name: "${entitySnake}".to_string(),
-        base_path: "${path}".to_string(),
-        id_type: ${idType},
-        enrich_items: None,
-        enrich_item: None,
-    })
-${byFieldMerges}
-}
-`;
-}
-
-export function generateReadOnlyRouter(
-  candidate: RustRouteCandidate,
-  options: RustGenerateOptions = {},
-): GeneratedFile {
-  const byFeature = options.organizeByFeature === true;
-  const layout = rustLayout(options);
-  return {
-    path: layout.filePath(candidate.name, "route"),
-    content: generateReadOnlyRouterContent(
-      candidate.name,
-      Array.isArray(candidate.byFields) ? candidate.byFields : [],
-      {
-        byFeature,
-        layout,
-        idTypeVariant: idTypeVariantForPk(candidate.primaryKey),
-      },
+    hasCoercion,
+    createValidator,
+    updateValidator,
+    coerceFn,
+    byFieldMerges: byFieldMergeChain(
+      entitySnake,
+      naming.apiPath(entitySnake),
+      normalizedByFields,
+      hasCoercion,
     ),
   };
-}
+  const tmpl = hasByFields ? crudByFieldsTmpl : crudPlainTmpl;
+  return content(naming.filePath(entitySnake), fill(tmpl, tokens));
+};
 
-/** Optimistic concurrency mirrors the runtime service layer (rust/src/run/server.rs build_service_registry): m2m junctions and readonly lookups never participate (their rows carry no client-managed version), an explicit per-type `use_optimistic_concurrency` overrides the datasource-wide flag, and everything else inherits it. Router and composed service must agree per entity or the router 428s a mutation the service would allow. */
-function entityUsesOcc(
-  candidate: RustRouteCandidate,
-  globalFlag: boolean,
-): boolean {
-  return entityUsesOptimisticConcurrency(candidate, globalFlag);
-}
+const renderEntityRouter = (
+  candidate: RouteCandidate,
+  opts: EmitOptions,
+): GenerateEntry =>
+  candidate.datasourceType === "readonly-lookup"
+    ? renderReadOnly(candidate, opts)
+    : renderCrud(candidate, opts);
 
-export function generateCrudRouter(
-  candidate: RustRouteCandidate,
-  options: RustGenerateOptions = {},
-): GeneratedFile {
-  const { requiredFields = [] } = options;
-  const byFeature = options.organizeByFeature === true;
-  const layout = rustLayout(options);
-  const allFields =
-    Array.isArray(options.allFields) && options.allFields.length > 0
-      ? options.allFields
-      : Array.isArray(candidate.fields)
-        ? candidate.fields
-        : [];
-  const enrichments = Array.isArray(candidate.enrichments)
-    ? candidate.enrichments
-    : [];
-  const eagerWriteChildren = Array.isArray(candidate.eagerWriteChildren)
-    ? candidate.eagerWriteChildren
-    : [];
-  return {
-    path: layout.filePath(candidate.name, "route"),
-    content: generateCrudRouterContent({
-      name: candidate.name,
-      requiredFields,
-      enrichments,
-      allFields,
-      primaryKey: candidate.primaryKey ?? { column: "id", rustType: "i64" },
-      eagerWriteChildren,
-      byFields: Array.isArray(candidate.byFields) ? candidate.byFields : [],
-      opts: { byFeature, layout },
-      useOptimisticConcurrency: entityUsesOcc(
-        candidate,
-        options.useOptimisticConcurrency === true,
-      ),
-    }),
-  };
-}
-
-// Rust serves a custom route through the spec-driven dynamic router (routes_doc.generic -> build_router in rust/src/run/server.rs), which dispatches by the route's `service` to its custom-service stub (ServiceError::Stub -> HTTP 501). A per-route file has no runtime consumer, so the Rust route stub generates nothing; the backing custom-service stub is the 501 override surface.
-export function generateCustomRouteStub(): null {
-  return null;
-}
-
-interface WiringRouter {
-  name: string;
-  enrichments?: Enrichment[];
-  readOnly?: boolean;
-}
-
-interface AppWiringInput {
-  routers: WiringRouter[];
-}
-
-/** The generated app-wiring aggregator: `compose_router(ctx)` builds each generated service facade from
- * the ComposeContext (each pulls its composed runtime stack) and merges the generated router that routes
- * to it — the single live source of truth. The runtime's RouteComposer hook calls this. */
-export function generateAppWiring(
-  wiring: AppWiringInput,
-  options: RustGenerateOptions = {},
-): GeneratedFile {
-  const byFeature = options.organizeByFeature === true;
-  const layout = rustLayout(options);
-  const opts = { byFeature, layout };
-  const survivors = wiring.routers.map((r) => r.name);
-  const imports = survivors.map((name) =>
-    serviceUseLine(name, names.className(name, "service"), opts),
+const renderAppWiring = (
+  candidates: RouteCandidate[],
+  opts: EmitOptions,
+): GenerateEntry => {
+  const { naming } = opts;
+  const imports = candidates.map((c) =>
+    naming.serviceUseLine(c.name, naming.serviceClassName(c.name)),
   );
-  const lets = survivors.map(
-    (name) =>
-      `    let ${serviceFieldName(name)} = std::sync::Arc::new(${names.className(name, "service")}::from_context(ctx)?);`,
+  const lets = candidates.map(
+    (c) =>
+      `    let ${serviceFieldName(c.name)} = std::sync::Arc::new(${naming.serviceClassName(c.name)}::from_context(ctx)?);`,
   );
-  const merges = wiring.routers.map(
-    (r) =>
-      `        .merge(${routeModulePath(r.name, opts)}::router(${serviceFieldName(r.name)}.clone()))`,
+  const merges = candidates.map(
+    (c) =>
+      `        .merge(${naming.routeModulePath(c.name)}::router(${serviceFieldName(c.name)}.clone()))`,
   );
-
   const body =
     merges.length > 0
-      ? `    let router = axum::Router::new()\n${merges.join("\n")};\n    Ok(router)`
+      ? `${lets.join("\n")}${lets.length > 0 ? "\n\n" : ""}    let router = axum::Router::new()\n${merges.join("\n")};\n    Ok(router)`
       : `    Ok(axum::Router::new())`;
-  const content = `use deterministic::{ComposeContext, RepositoryError};
-${imports.join("\n")}
-
-/// Builds each generated service facade from the ComposeContext and merges the generated router that
-/// routes to it — the live source of truth for CRUD, enrich, and eager behavior (all from the runtime).
-pub fn compose_router(ctx: &ComposeContext) -> Result<axum::Router, RepositoryError> {
-${lets.join("\n")}${lets.length > 0 ? "\n\n" : ""}${body}
-}
-`;
-  return { path: appWiringFilePath(byFeature), content };
-}
-
-/** Catalog `routes` step (rust). */
-export const generate = (ctx: unknown) =>
-  routesStepGenerate(
-    {
-      dispatchStep: dispatchRoutesStep,
-      generator: { createGenerator },
-      language: "rust",
-    },
-    ctx,
+  return content(
+    naming.appWiringFilePath(),
+    fill(appWiringTmpl, { imports, body }),
   );
+};
 
-export const createGenerator = () => ({
-  generate: (config: RoutesGenerateConfig) =>
-    generateRoutesFiles({
-      ...config,
-      primitives: {
-        generateCrudRouter,
-        generateReadOnlyRouter,
-        generateCustomRouteStub,
-        generateAppWiring,
-        nestedRouterGenerators: {},
-      },
-    }),
-});
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  const ds = datasourceSettings(ctx.settings);
+  const parsed = await loadRoutes(ctx.reader, { idType: ds.idType });
+  const opts = await emitOptions(
+    ctx.settings,
+    ctx.reader,
+    parsed.nested,
+    parsed.datasources,
+  );
+  const entries: GenerateEntry[] = parsed.candidates.map((c) =>
+    renderEntityRouter(c, opts),
+  );
+  if (parsed.candidates.length > 0) {
+    entries.push(renderAppWiring(parsed.candidates, opts));
+  }
+  return entries;
+};
