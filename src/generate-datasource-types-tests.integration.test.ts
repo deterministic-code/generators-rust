@@ -145,8 +145,8 @@ describe("generate datasource types tests", () => {
     assert.match(user, /fn sets_id\(/);
     assert.doesNotMatch(user, /fn gets_uuid\(/);
     assert.doesNotMatch(user, /fn sets_uuid\(/);
-    assert.match(user, /let initial = uuid::Uuid::nil\(\);/);
-    assert.match(user, /role_id: uuid::Uuid::nil\(\),/);
+    assert.match(user, /let initial = String::from\("00000000-0000-0000-0000-000000000000"\);/);
+    assert.match(user, /role_id: String::from\("00000000-0000-0000-0000-000000000000"\),/);
   });
 
   it("uses i64 ids when datasource.id_type=biginteger", async () => {
@@ -154,13 +154,6 @@ describe("generate datasource types tests", () => {
     assert.match(user, /id: 1i64,/);
     assert.match(user, /let next = 2i64;/);
     assert.match(user, /fn sample\(\) -> User \{/);
-  });
-
-  it("maps datetime fields to strings when datasource.datetime=string", async () => {
-    const user = await userBody({ "datasource.datetime": "string" });
-    assert.match(user, /created: String::from\("2024-01-01T00:00:00.000Z"\)/);
-    assert.match(user, /created_at: String::from\("2024-01-01T00:00:00.000Z"\)/);
-    assert.match(user, /let next = String::from\("2024-01-02T00:00:00.000Z"\);/);
   });
 
   it("writes codegen.schema_version into the file header", async () => {

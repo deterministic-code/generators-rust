@@ -10,12 +10,11 @@ import {
   type DatasourceField,
   type DatasourceType,
 } from "./specification-parser.ts";
-import { nativeFieldType } from "./common/type-converter.ts";
+import { convertSpecType } from "./base-type-converter.ts";
 import { typeTestTmpl } from "./resources/datasource-type-validators-tests.ts";
 
 type Datasource = {
   idType: string;
-  datetimeRepr: string;
   withUuidColumn: boolean;
   useOptimisticConcurrency: boolean;
 };
@@ -24,7 +23,6 @@ const datasource = (settings: Record<string, string>): Datasource => {
   const idType = settings["datasource.id_type"] ?? "integer";
   return {
     idType,
-    datetimeRepr: settings["datasource.datetime"] ?? "native",
     withUuidColumn: idType !== "uuid",
     useOptimisticConcurrency:
       settings["datasource.use_optimistic_concurrency"] === "true",
@@ -126,7 +124,7 @@ const fieldTok = (
   field: DatasourceField | { name: string; type: string; isNullable: boolean },
   opts: EmitOptions,
 ): FieldTok => {
-  const native = nativeFieldType(opts.ds, field);
+  const native = convertSpecType(field.type);
   const { sample } = samplesForNative(native, field.type);
   return {
     name: field.name,

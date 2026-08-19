@@ -11,12 +11,11 @@ import {
   type ViewField,
   type ViewType,
 } from "./specification-parser.ts";
-import { convertSpecType, nativeFieldType } from "./common/type-converter.ts";
+import { convertSpecType } from "./base-type-converter.ts";
 import { typeTmpl } from "./resources/view-types.ts";
 
 type Datasource = {
   idType: string;
-  datetimeRepr: string;
   withUuidColumn: boolean;
   useOptimisticConcurrency: boolean;
 };
@@ -25,7 +24,6 @@ const datasource = (settings: Record<string, string>): Datasource => {
   const idType = settings["datasource.id_type"] ?? "integer";
   return {
     idType,
-    datetimeRepr: settings["datasource.datetime"] ?? "native",
     withUuidColumn: idType !== "uuid",
     useOptimisticConcurrency:
       settings["datasource.use_optimistic_concurrency"] === "true",
@@ -86,7 +84,7 @@ const isAlias = (view: ShapedView): boolean =>
 const rustTypeFor = (field: ViewField, opts: EmitOptions): string => {
   let base =
     field.kind === "primitive"
-      ? convertSpecType(field.base, opts.ds.datetimeRepr)
+      ? convertSpecType(field.base)
       : qual(field.base, field.kind, opts.naming);
   if (field.isArray) base = `Vec<${base}>`;
   return field.isNullable ? `Option<${base}>` : base;
@@ -103,7 +101,7 @@ const parentFields = (view: ShapedView, opts: EmitOptions) => {
   return tableFields(table.fields, opts.ds.idType)
     .filter((f) => !omit.has(f.name))
     .map((f) => {
-      const native = nativeFieldType(opts.ds, f);
+      const native = convertSpecType(f.type);
       const rustType = f.isNullable ? `Option<${native}>` : native;
       return { ident: opts.naming.fieldName(f.name), rustType };
     });

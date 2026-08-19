@@ -11,12 +11,11 @@ import {
   type ViewField,
   type ViewType,
 } from "./specification-parser.ts";
-import { convertSpecType, nativeFieldType } from "./common/type-converter.ts";
+import { convertSpecType } from "./base-type-converter.ts";
 import { typeTestTmpl } from "./resources/view-types-tests.ts";
 
 type Datasource = {
   idType: string;
-  datetimeRepr: string;
   withUuidColumn: boolean;
   useOptimisticConcurrency: boolean;
 };
@@ -25,7 +24,6 @@ const datasource = (settings: Record<string, string>): Datasource => {
   const idType = settings["datasource.id_type"] ?? "integer";
   return {
     idType,
-    datetimeRepr: settings["datasource.datetime"] ?? "native",
     withUuidColumn: idType !== "uuid",
     useOptimisticConcurrency:
       settings["datasource.use_optimistic_concurrency"] === "true",
@@ -145,7 +143,7 @@ const renderDs = (name: string, opts: EmitOptions): string => {
   if (table === undefined) return `${cls} {}`;
   const body = tableFields(table.fields, opts.ds.idType)
     .map((f) => {
-      const { sample } = samplesForNative(nativeFieldType(opts.ds, f), f.type);
+      const { sample } = samplesForNative(convertSpecType(f.type), f.type);
       const val = f.isNullable ? `Some(${sample})` : sample;
       return `${opts.naming.fieldName(f.name)}: ${val}`;
     })
@@ -164,7 +162,7 @@ const parentToks = (view: ShapedView, opts: EmitOptions): FieldTok[] => {
   return tableFields(table.fields, opts.ds.idType)
     .filter((f) => !omit.has(f.name))
     .map((f) => {
-      const pair = samplesForNative(nativeFieldType(opts.ds, f), f.type);
+      const pair = samplesForNative(convertSpecType(f.type), f.type);
       return {
         ident: opts.naming.fieldName(f.name),
         sampleExpr: f.isNullable ? `Some(${pair.sample})` : pair.sample,
@@ -182,7 +180,7 @@ const viewFieldTok = (
   let pair: { sample: string; next: string };
   if (field.kind === "primitive") {
     pair = samplesForNative(
-      convertSpecType(field.base, opts.ds.datetimeRepr),
+      convertSpecType(field.base),
       field.base,
     );
   } else if (field.kind === "datasource") {

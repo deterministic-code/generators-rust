@@ -324,16 +324,9 @@ types: []
     assert.match(card, /schema-version: 9.9/);
   });
 
-  it("maps datetime fields to strings when datasource.datetime=string", async () => {
-    const card = await bodyOf("card_payment_tests.rs", {
-      "datasource.datetime": "string",
-    });
-    assert.match(card, /paid_at: String::from\("2024-01-01T00:00:00.000Z"\)/);
-  });
-
   it("uses uuid ids when datasource.id_type=uuid", async () => {
     const user = await bodyOf("user_tests.rs", { "datasource.id_type": "uuid" });
-    assert.match(user, /id: uuid::Uuid::nil\(\)/);
+    assert.match(user, /id: String::from\("00000000-0000-0000-0000-000000000000"\)/);
     assert.doesNotMatch(user, /fn gets_uuid\(/);
   });
 
