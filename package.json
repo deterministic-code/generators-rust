@@ -23,10 +23,11 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R src/templates dist/",
     "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "test": "node --experimental-strip-types --test src/generate-backend-app.integration.test.ts src/generate-datasource-types.integration.test.ts src/generate-datasource-types-tests.integration.test.ts src/generate-datasource-type-validators.integration.test.ts src/generate-datasource-type-validators-tests.integration.test.ts src/generate-view-types.integration.test.ts src/generate-view-types-tests.integration.test.ts src/generate-view-type-validators.integration.test.ts src/generate-view-type-validators-tests.integration.test.ts src/generate-services.integration.test.ts src/generate-service-tests.integration.test.ts src/generate-service-integration-tests.integration.test.ts src/generate-routes.integration.test.ts src/generate-routes-tests.integration.test.ts src/generate-routes-e2e-test.integration.test.ts src/generate-perf-e2e-tests.integration.test.ts src/generate-perf-server.integration.test.ts src/generate-openapi.integration.test.ts src/common/parse-datasource-types.test.ts src/common/parse-view-types.test.ts src/common/parse-services.test.ts src/common/parse-routes.test.ts"
+    "test": "node --experimental-strip-types --test src/generate-backend-app.integration.test.ts src/generate-datasource-types.integration.test.ts src/generate-datasource-types-tests.integration.test.ts src/generate-datasource-type-validators.integration.test.ts src/generate-datasource-type-validators-tests.integration.test.ts src/generate-view-types.integration.test.ts src/generate-view-types-tests.integration.test.ts src/generate-view-type-validators.integration.test.ts src/generate-view-type-validators-tests.integration.test.ts src/generate-services.integration.test.ts src/generate-service-tests.integration.test.ts src/generate-service-integration-tests.integration.test.ts src/generate-routes.integration.test.ts src/generate-routes-tests.integration.test.ts src/generate-routes-e2e-test.integration.test.ts src/generate-perf-e2e-tests.integration.test.ts src/generate-perf-server.integration.test.ts src/generate-openapi.integration.test.ts"
   },
   "dependencies": {
-    "@deterministic-code/patch-merger": "github:deterministic-code/patch-merger",
+    "@deterministic-code/generators-common": "github:deterministic-code/generators-common",
+    "@deterministic-code/generators-openapi": "github:deterministic-code/generators-openapi",
     "change-case": "^5.4.4",
     "mustache": "^4.2.0",
     "pluralize": "^8.0.0",

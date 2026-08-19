@@ -1,48 +1,65 @@
+import { fill } from "@deterministic-code/generators-common/fill";
+import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
+import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
+import { viewPaths, type ArtifactPaths } from "./common/paths.ts";
 import {
-  datasourceSettings,
-  nativeFieldType,
   tableFields,
-  type DatasourceSettings,
-} from "./common/datasource-settings.ts";
-import { commentStyle, type CommentStyle } from "./common/doc-comment.ts";
-import { fill } from "./common/fill.ts";
-import type { GenerateContext, SettingsDict } from "./common/generate-context.ts";
-import { content, type GenerateEntry } from "./common/generate-entry.ts";
-import { rustNaming, type ArtifactNaming } from "./common/naming.ts";
-import {
+  SpecificationParser,
   DATASOURCE_TYPES_YAML,
-  parseDatasourceTypes,
   type DatasourceType,
-} from "./common/parse-datasource-types.ts";
-import {
-  loadViewTypes,
   type ShapedView,
   type ViewField,
   type ViewType,
-} from "./common/parse-view-types.ts";
-import { settingsStr } from "./common/settings.ts";
-import { convertSpecType } from "./common/type-converter.ts";
+} from "./specification-parser.ts";
+import { convertSpecType, nativeFieldType } from "./common/type-converter.ts";
 import { typeTmpl } from "./resources/view-types.ts";
 
+type Datasource = {
+  idType: string;
+  datetimeRepr: string;
+  withUuidColumn: boolean;
+  useOptimisticConcurrency: boolean;
+};
+
+const datasource = (settings: Record<string, string>): Datasource => {
+  const idType = settings["datasource.id_type"] ?? "integer";
+  return {
+    idType,
+    datetimeRepr: settings["datasource.datetime"] ?? "native",
+    withUuidColumn: idType !== "uuid",
+    useOptimisticConcurrency:
+      settings["datasource.use_optimistic_concurrency"] === "true",
+  };
+};
+
+const docTokens = (settings: Record<string, string>) => {
+  const comments = settings["comments"];
+  return {
+    simpleDoc: comments !== "none" && comments !== "description",
+    descriptionDoc: comments === "description",
+  };
+};
+
 type EmitOptions = {
-  ds: DatasourceSettings;
-  naming: ArtifactNaming;
+  ds: Datasource;
+  naming: ArtifactPaths;
   schemaVersion: string;
-  style: CommentStyle;
+  simpleDoc: boolean;
+  descriptionDoc: boolean;
   tables: Map<string, DatasourceType>;
 };
 
-const emitBase = (settings: SettingsDict) => ({
-  ds: datasourceSettings(settings),
-  naming: rustNaming(settings),
-  schemaVersion: settingsStr(settings, "codegen.schema_version") ?? "1.0",
-  style: commentStyle(settingsStr(settings, "comments")),
+const emitBase = (settings: Record<string, string>) => ({
+  ds: datasource(settings),
+  naming: viewPaths(settings),
+  schemaVersion: settings["codegen.schema_version"] ?? "1.0",
+  ...docTokens(settings),
 });
 
 const qual = (
   entity: string,
   kind: "datasource" | "view",
-  naming: ArtifactNaming,
+  naming: ArtifactPaths,
 ): string => {
   const cls = naming.className(entity);
   if (naming.byFeature) {
@@ -83,7 +100,7 @@ const parentFields = (view: ShapedView, opts: EmitOptions) => {
     ...view.omit,
     ...view.enrichments.map((e) => e.fkColumn),
   ]);
-  return tableFields(table.fields, opts.ds)
+  return tableFields(table.fields, opts.ds.idType)
     .filter((f) => !omit.has(f.name))
     .map((f) => {
       const native = nativeFieldType(opts.ds, f);
@@ -119,8 +136,8 @@ const renderView = (view: ViewType, opts: EmitOptions): GenerateEntry => {
     opts.naming.filePath(view.name),
     fill(typeTmpl, {
       schemaVersion: opts.schemaVersion,
-      simpleDoc: opts.style === "simple",
-      descriptionDoc: opts.style === "description",
+      simpleDoc: opts.simpleDoc,
+      descriptionDoc: opts.descriptionDoc,
       structName,
       datasourceType: isUnion ? "standard" : (view.inherits ?? "standard"),
       target: isUnion ? "UnionView" : "ShapedView",
@@ -149,9 +166,9 @@ export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   const base = emitBase(ctx.settings);
-  const views = await loadViewTypes(ctx.reader);
+  const views = await new SpecificationParser(ctx.reader).loadViewTypes();
   const tables = (await ctx.reader.exists(DATASOURCE_TYPES_YAML))
-    ? parseDatasourceTypes({
+    ? new SpecificationParser().parseDatasourceTypes({
         yaml: await ctx.reader.read(DATASOURCE_TYPES_YAML),
         idType: base.ds.idType,
       })

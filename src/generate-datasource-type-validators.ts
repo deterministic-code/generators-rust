@@ -1,29 +1,42 @@
 import { snakeCase } from "change-case";
+import { fill } from "@deterministic-code/generators-common/fill";
+import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
+import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
+import { datasourcePaths, type ArtifactPaths } from "./common/paths.ts";
 import {
-  datasourceSettings,
-  type DatasourceSettings,
-} from "./common/datasource-settings.ts";
-import { fill } from "./common/fill.ts";
-import type { GenerateContext, SettingsDict } from "./common/generate-context.ts";
-import { content, type GenerateEntry } from "./common/generate-entry.ts";
-import { rustNaming, type ArtifactNaming } from "./common/naming.ts";
-import {
-  loadDatasourceTypes,
+  SpecificationParser,
   type DatasourceField,
   type DatasourceType,
-} from "./common/parse-datasource-types.ts";
-import { settingsStr } from "./common/settings.ts";
+} from "./specification-parser.ts";
 import {
   idTypeLiteralSuffix,
   intLiteralSuffix,
 } from "./common/type-converter.ts";
-import { isFiniteInt, isFiniteNumber } from "./common/yaml-entry.ts";
+import { isFiniteInt, isFiniteNumber } from "@deterministic-code/generators-common/yaml-entry";
 import { typeTmpl } from "./resources/datasource-type-validators.ts";
 import { systemColumnsInjectedFor } from "./system-columns.ts";
 
+type Datasource = {
+  idType: string;
+  datetimeRepr: string;
+  withUuidColumn: boolean;
+  useOptimisticConcurrency: boolean;
+};
+
+const datasource = (settings: Record<string, string>): Datasource => {
+  const idType = settings["datasource.id_type"] ?? "integer";
+  return {
+    idType,
+    datetimeRepr: settings["datasource.datetime"] ?? "native",
+    withUuidColumn: idType !== "uuid",
+    useOptimisticConcurrency:
+      settings["datasource.use_optimistic_concurrency"] === "true",
+  };
+};
+
 type EmitOptions = {
-  ds: DatasourceSettings;
-  naming: ArtifactNaming;
+  ds: Datasource;
+  naming: ArtifactPaths;
   schemaVersion: string;
 };
 
@@ -34,10 +47,10 @@ const SYSTEM: Record<string, DatasourceField> = {
   updated: { name: "updated", type: "datetime", isNullable: false },
 };
 
-const emitOptions = (settings: SettingsDict): EmitOptions => ({
-  ds: datasourceSettings(settings),
-  naming: rustNaming(settings),
-  schemaVersion: settingsStr(settings, "codegen.schema_version") ?? "1.0",
+const emitOptions = (settings: Record<string, string>): EmitOptions => ({
+  ds: datasource(settings),
+  naming: datasourcePaths(settings),
+  schemaVersion: settings["codegen.schema_version"] ?? "1.0",
 });
 
 const errIf = (cond: string, msg: string): string =>
@@ -171,12 +184,12 @@ const standardLines = (table: DatasourceType, opts: EmitOptions): string[] => {
     .flatMap((n) => checksForField(SYSTEM[n], opts, n === "id"));
 };
 
-const validatorPath = (entity: string, naming: ArtifactNaming): string =>
+const validatorPath = (entity: string, naming: ArtifactPaths): string =>
   naming.byFeature
     ? naming.filePath(entity).replace(/\.rs$/, "_validator.rs")
     : `datasource_${naming.fileBase(entity)}_validator.rs`;
 
-const typePath = (entity: string, naming: ArtifactNaming): string => {
+const typePath = (entity: string, naming: ArtifactPaths): string => {
   const cls = naming.className(entity);
   if (!naming.byFeature) return `crate::types::generated::datasource::${cls}`;
   const module = naming
@@ -213,6 +226,6 @@ export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   const opts = emitOptions(ctx.settings);
-  const types = await loadDatasourceTypes(ctx.reader, opts.ds.idType);
+  const types = await new SpecificationParser(ctx.reader).loadDatasourceTypes(opts.ds.idType);
   return types.map((table) => renderValidator(table, opts));
 };

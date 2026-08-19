@@ -1,0 +1,52 @@
+fn setup_{{entity}}_router() -> axum::Router {
+    let svc: std::sync::Arc<dyn DynamicService> = std::sync::Arc::new(
+        GenericCrudService::new(std::sync::Arc::new(InMemoryCrudRepository::new())),
+    );
+    let registry = ServiceRegistryBuilder::new()
+        .register("{{entity}}", svc)
+        .build();
+    let specs = vec![
+        GenericRouteSpec {
+            route_name: "list_{{entity}}".to_string(),
+            path: "/api/{{segment}}".to_string(),
+            method: HttpMethod::Get,
+            service: "{{entity}}".to_string(),
+            service_method: "findAll".to_string(),
+            response_format: Some(ResponseFormat::Items),
+            status_code: None,
+            aliases: vec![],
+        },
+        GenericRouteSpec {
+            route_name: "get_{{entity}}_by_id".to_string(),
+            path: "/api/{{segment}}/:id".to_string(),
+            method: HttpMethod::Get,
+            service: "{{entity}}".to_string(),
+            service_method: "findById".to_string(),
+            response_format: Some(ResponseFormat::Item),
+            status_code: None,
+            aliases: vec![],
+        },
+        GenericRouteSpec {
+            route_name: "create_{{entity}}".to_string(),
+            path: "/api/{{segment}}".to_string(),
+            method: HttpMethod::Post,
+            service: "{{entity}}".to_string(),
+            service_method: "create".to_string(),
+            response_format: Some(ResponseFormat::Item),
+            status_code: None,
+            aliases: vec![],
+        },
+        GenericRouteSpec {
+            route_name: "delete_{{entity}}_by_id".to_string(),
+            path: "/api/{{segment}}/:id".to_string(),
+            method: HttpMethod::Delete,
+            service: "{{entity}}".to_string(),
+            service_method: "delete".to_string(),
+            response_format: None,
+            status_code: None,
+            aliases: vec![],
+        },
+    ];
+    let (router, _report) = build_router(&specs, &registry);
+    router
+}

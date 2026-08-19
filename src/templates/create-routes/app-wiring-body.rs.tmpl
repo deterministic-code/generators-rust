@@ -1,0 +1,11 @@
+{{#hasServices}}{{#services}}
+    let {{fieldName}} = std::sync::Arc::new({{className}}::from_context(ctx)?);
+{{/services}}
+
+    let router = axum::Router::new()
+{{#services}}
+        .merge({{routeModule}}::router({{fieldName}}.clone()))
+{{/services}};
+    Ok(router)
+{{/hasServices}}{{^hasServices}}    Ok(axum::Router::new())
+{{/hasServices}}

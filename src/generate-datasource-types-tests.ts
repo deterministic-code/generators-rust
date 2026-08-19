@@ -1,31 +1,44 @@
+import { fill } from "@deterministic-code/generators-common/fill";
+import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
+import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
+import { datasourcePaths, type ArtifactPaths } from "./common/paths.ts";
 import {
-  datasourceSettings,
-  nativeFieldType,
   tableFields,
-  type DatasourceSettings,
-} from "./common/datasource-settings.ts";
-import { fill } from "./common/fill.ts";
-import type { GenerateContext, SettingsDict } from "./common/generate-context.ts";
-import { content, type GenerateEntry } from "./common/generate-entry.ts";
-import { rustNaming, type ArtifactNaming } from "./common/naming.ts";
-import {
+  SpecificationParser,
   DATASOURCE_TYPES_YAML,
-  parseDatasourceTypes,
   type DatasourceType,
-} from "./common/parse-datasource-types.ts";
-import { settingsStr } from "./common/settings.ts";
+} from "./specification-parser.ts";
+import { nativeFieldType } from "./common/type-converter.ts";
 import { typeTestTmpl } from "./resources/datasource-types-tests.ts";
 
+type Datasource = {
+  idType: string;
+  datetimeRepr: string;
+  withUuidColumn: boolean;
+  useOptimisticConcurrency: boolean;
+};
+
+const datasource = (settings: Record<string, string>): Datasource => {
+  const idType = settings["datasource.id_type"] ?? "integer";
+  return {
+    idType,
+    datetimeRepr: settings["datasource.datetime"] ?? "native",
+    withUuidColumn: idType !== "uuid",
+    useOptimisticConcurrency:
+      settings["datasource.use_optimistic_concurrency"] === "true",
+  };
+};
+
 type EmitOptions = {
-  ds: DatasourceSettings;
-  naming: ArtifactNaming;
+  ds: Datasource;
+  naming: ArtifactPaths;
   schemaVersion: string;
 };
 
-const emitOptions = (settings: SettingsDict): EmitOptions => ({
-  ds: datasourceSettings(settings),
-  naming: rustNaming(settings),
-  schemaVersion: settingsStr(settings, "codegen.schema_version") ?? "1.0",
+const emitOptions = (settings: Record<string, string>): EmitOptions => ({
+  ds: datasource(settings),
+  naming: datasourcePaths(settings),
+  schemaVersion: settings["codegen.schema_version"] ?? "1.0",
 });
 
 const rustString = (value: string): string => `String::from(${JSON.stringify(value)})`;
@@ -118,7 +131,7 @@ const fieldTokens = (
   };
 };
 
-const testPath = (entity: string, naming: ArtifactNaming): string => {
+const testPath = (entity: string, naming: ArtifactPaths): string => {
   const file = `${naming.fileBase(entity)}_tests.rs`;
   if (!naming.byFeature) return file;
   const typeFile = naming.filePath(entity);
@@ -129,7 +142,7 @@ const renderTests = (
   table: DatasourceType,
   opts: EmitOptions,
 ): GenerateEntry => {
-  const fields = tableFields(table.fields, opts.ds).map((f) =>
+  const fields = tableFields(table.fields, opts.ds.idType).map((f) =>
     fieldTokens(f, opts),
   );
   return content(
@@ -147,7 +160,7 @@ export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   const opts = emitOptions(ctx.settings);
-  const types = parseDatasourceTypes({
+  const types = new SpecificationParser().parseDatasourceTypes({
     yaml: await ctx.reader.read(DATASOURCE_TYPES_YAML),
     idType: opts.ds.idType,
   });

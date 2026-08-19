@@ -1,0 +1,5 @@
+fn {{fnName}}(body: &RowMap) -> Result<(), Vec<String>> {
+    let mut errors: Vec<String> = Vec::new();
+{{{checks}}}
+    if errors.is_empty() { Ok(()) } else { Err(errors) }
+}

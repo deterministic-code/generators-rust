@@ -1,31 +1,36 @@
 import pluralize from "pluralize";
-import { datasourceSettings } from "./common/datasource-settings.ts";
-import { fill } from "./common/fill.ts";
-import type { GenerateContext, SettingsDict } from "./common/generate-context.ts";
-import { content, type GenerateEntry } from "./common/generate-entry.ts";
+import { fill } from "@deterministic-code/generators-common/fill";
+import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
+import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
-  rustRouteNaming,
-  type RouteNaming,
-} from "./common/naming.ts";
+  routePaths,
+  type RoutePaths,
+} from "./common/paths.ts";
+import { idTypeToNative } from "./common/type-converter.ts";
 import {
+  SpecificationParser,
   entityUsesOptimisticConcurrency,
-  loadRoutes,
+  type DatasourceField,
+  type DatasourceType,
   type NestedRouteDescriptor,
   type RouteByField,
   type RouteCandidate,
-} from "./common/parse-routes.ts";
-import type { DatasourceField, DatasourceType } from "./common/parse-datasource-types.ts";
-import {
-  loadViewTypes,
   type ViewEnrichment,
   type ViewType,
-} from "./common/parse-view-types.ts";
+} from "./specification-parser.ts";
 import {
+  appWiringBodyTmpl,
   appWiringTmpl,
-  crudByFieldsTmpl,
-  crudPlainTmpl,
-  readonlyByFieldsTmpl,
-  readonlyPlainTmpl,
+  byFieldMergeTmpl,
+  checkEagerChildTmpl,
+  checkOptionalTypedTmpl,
+  checkRequiredTmpl,
+  checkRequiredTypedTmpl,
+  coerceRowTmpl,
+  crudTmpl,
+  readonlyTmpl,
+  validatorEmptyTmpl,
+  validatorTmpl,
 } from "./resources/routes.ts";
 import { serviceFieldName } from "./rust-eager-service-graph.ts";
 
@@ -62,7 +67,7 @@ type NormalizedByField = {
 };
 
 type EmitOptions = {
-  naming: RouteNaming;
+  naming: RoutePaths;
   idType: string;
   rustIdType: string;
   useOptimisticConcurrency: boolean;
@@ -72,19 +77,18 @@ type EmitOptions = {
 };
 
 const emitOptions = async (
-  settings: SettingsDict,
-  reader: GenerateContext["reader"],
+  settings: Record<string, string>,
+  views: ViewType[],
   nested: NestedRouteDescriptor[],
   datasources: DatasourceType[],
 ): Promise<EmitOptions> => {
-  const ds = datasourceSettings(settings);
-  const hasViews = await reader.exists("view_types.yaml");
-  const views = hasViews ? await loadViewTypes(reader) : [];
+  const idType = settings["datasource.id_type"] ?? "integer";
   return {
-    naming: rustRouteNaming(settings),
-    idType: ds.idType,
-    rustIdType: ds.rustIdType,
-    useOptimisticConcurrency: ds.useOptimisticConcurrency,
+    naming: routePaths(settings),
+    idType,
+    rustIdType: idTypeToNative(idType),
+    useOptimisticConcurrency:
+      settings["datasource.use_optimistic_concurrency"] === "true",
     views,
     datasources,
     nested,
@@ -109,27 +113,26 @@ const normalizeByFields = (byFields: RouteByField[]): NormalizedByField[] =>
     })
     .filter((e): e is NormalizedByField => e !== null);
 
+const rustStrSlice = (names: string[]): string =>
+  names.length > 0
+    ? `&[${names.map((n) => JSON.stringify(n)).join(", ")}]`
+    : "&[]";
+
 const byFieldPrimitiveCall = (
   entitySnake: string,
   apiPath: string,
   entry: NormalizedByField,
   hasCoercion: boolean,
-): string => {
-  const coerceExpr = hasCoercion
-    ? "Some(Arc::new(|row: &mut RowMap| coerce_row_types(row)))"
-    : "None";
-  const path = `/api/${apiPath}`;
-  return `create_by_field_router(ByFieldRouterConfig {
-        service: service.clone(),
-        entity_name: "${entitySnake}".to_string(),
-        base_path: "${path}".to_string(),
-        field: "${entry.byField}".to_string(),
-        unique: ${entry.unique ? "true" : "false"},
-        methods: vec![deterministic::routes::ByFieldMethod::Get],
-        coerce_row: ${coerceExpr},
-        update_validator: None,
-    })`;
-};
+): string =>
+  fill(byFieldMergeTmpl, {
+    entitySnake,
+    path: `/api/${apiPath}`,
+    byField: entry.byField,
+    unique: entry.unique ? "true" : "false",
+    coerceExpr: hasCoercion
+      ? "Some(Arc::new(|row: &mut RowMap| coerce_row_types(row)))"
+      : "None",
+  }).trimEnd();
 
 const byFieldMergeChain = (
   entitySnake: string,
@@ -138,10 +141,7 @@ const byFieldMergeChain = (
   hasCoercion: boolean,
 ): string =>
   normalizedByFields
-    .map(
-      (e) =>
-        `    .merge(${byFieldPrimitiveCall(entitySnake, apiPath, e, hasCoercion)})`,
-    )
+    .map((e) => byFieldPrimitiveCall(entitySnake, apiPath, e, hasCoercion))
     .join("\n");
 
 const fieldTypeCheck = (type: string): string | null => {
@@ -162,41 +162,30 @@ const fieldTypeCheck = (type: string): string | null => {
   }
 };
 
-const buildEagerChildShapeCheck = (child: EagerChild): string => {
-  const name = child.fieldName;
-  return `    match body.get(${JSON.stringify(name)}) {
-        None => {}
-        Some(v) if v.is_null() => {}
-        Some(v) => match v {
-            serde_json::Value::Array(arr) => {
-                for (i, item) in arr.iter().enumerate() {
-                    if !item.is_object() {
-                        errors.push(format!("${name}[{}]: expected object", i));
-                    }
-                }
-            }
-            _ => errors.push("${name}: expected array".to_string()),
-        }
-    }`;
-};
+const buildEagerChildShapeCheck = (child: EagerChild): string =>
+  fill(checkEagerChildTmpl, {
+    name: child.fieldName,
+    nameJson: JSON.stringify(child.fieldName),
+  }).trimEnd();
 
 const requiredFieldCheck = (f: Field, requireAll: boolean): string => {
   const typeCheck = fieldTypeCheck(f.type);
-  const present = `body.get("${f.name}").filter(|v| !v.is_null())`;
   if (requireAll) {
     if (typeCheck) {
-      return `    match ${present} {
-        None => errors.push("${f.name}: required".to_string()),
-        Some(v) if !v.${typeCheck}() => errors.push("${f.name}: expected ${f.type}".to_string()),
-        _ => {}
-    }`;
+      return fill(checkRequiredTypedTmpl, {
+        name: f.name,
+        typeCheck,
+        type: f.type,
+      }).trimEnd();
     }
-    return `    if ${present}.is_none() { errors.push("${f.name}: required".to_string()); }`;
+    return fill(checkRequiredTmpl, { name: f.name }).trimEnd();
   }
   if (typeCheck) {
-    return `    if let Some(v) = ${present} {
-        if !v.${typeCheck}() { errors.push("${f.name}: expected ${f.type}".to_string()); }
-    }`;
+    return fill(checkOptionalTypedTmpl, {
+      name: f.name,
+      typeCheck,
+      type: f.type,
+    }).trimEnd();
   }
   return "";
 };
@@ -207,19 +196,16 @@ const buildValidatorFn = (args: {
   requireAll: boolean;
   directFkChildren: EagerChild[];
 }): string => {
-  const requiredChecks = args.requiredFields
-    .map((f) => requiredFieldCheck(f, args.requireAll))
-    .filter((s) => s.length > 0);
-  const childShapeChecks = args.directFkChildren.map(buildEagerChildShapeCheck);
-  const checks = [...requiredChecks, ...childShapeChecks].join("\n");
+  const checks = [
+    ...args.requiredFields.map((f) => requiredFieldCheck(f, args.requireAll)),
+    ...args.directFkChildren.map(buildEagerChildShapeCheck),
+  ]
+    .filter((s) => s.length > 0)
+    .join("\n");
   if (checks.length === 0) {
-    return `fn ${args.fnName}(_body: &RowMap) -> Result<(), Vec<String>> { Ok(()) }`;
+    return fill(validatorEmptyTmpl, { fnName: args.fnName }).trimEnd();
   }
-  return `fn ${args.fnName}(body: &RowMap) -> Result<(), Vec<String>> {
-    let mut errors: Vec<String> = Vec::new();
-${checks}
-    if errors.is_empty() { Ok(()) } else { Err(errors) }
-}`;
+  return fill(validatorTmpl, { fnName: args.fnName, checks }).trimEnd();
 };
 
 const applyEnrichmentToRequiredFields = (
@@ -246,78 +232,11 @@ const applyEnrichmentToRequiredFields = (
 const generateCoerceRowFn = (
   booleanFields: Field[],
   binaryFields: Field[],
-): string => {
-  const boolNames = booleanFields.map((f) => f.name);
-  const binNames = binaryFields.map((f) => f.name);
-  const boolArr = boolNames.length
-    ? `&[${boolNames.map((n) => JSON.stringify(n)).join(", ")}]`
-    : "&[]";
-  const binArr = binNames.length
-    ? `&[${binNames.map((n) => JSON.stringify(n)).join(", ")}]`
-    : "&[]";
-  return `fn coerce_row_types(row: &mut RowMap) {
-    let bool_cols: &[&str] = ${boolArr};
-    let binary_cols: &[&str] = ${binArr};
-    for col in bool_cols {
-        if let Some(v) = row.get(*col).cloned() {
-            match v {
-                Value::Number(n) => {
-                    if let Some(i) = n.as_i64() {
-                        row.insert((*col).to_string(), Value::Bool(i != 0));
-                    }
-                }
-                Value::Bool(_) | Value::Null => {}
-                _ => {}
-            }
-        }
-    }
-    for col in binary_cols {
-        if let Some(v) = row.get(*col).cloned() {
-            match v {
-                Value::Array(arr) => {
-                    let bytes: Vec<u8> = arr
-                        .iter()
-                        .filter_map(|x| x.as_u64().and_then(|n| u8::try_from(n).ok()))
-                        .collect();
-                    let encoded = base64_encode(&bytes);
-                    row.insert((*col).to_string(), Value::String(encoded));
-                }
-                Value::Null | Value::String(_) => {}
-                _ => {}
-            }
-        }
-    }
-}
-
-fn base64_encode(bytes: &[u8]) -> String {
-    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
-    let mut i = 0;
-    while i + 3 <= bytes.len() {
-        let n = ((bytes[i] as u32) << 16) | ((bytes[i + 1] as u32) << 8) | (bytes[i + 2] as u32);
-        out.push(CHARSET[((n >> 18) & 0x3f) as usize] as char);
-        out.push(CHARSET[((n >> 12) & 0x3f) as usize] as char);
-        out.push(CHARSET[((n >> 6) & 0x3f) as usize] as char);
-        out.push(CHARSET[(n & 0x3f) as usize] as char);
-        i += 3;
-    }
-    let rem = bytes.len() - i;
-    if rem == 1 {
-        let n = (bytes[i] as u32) << 16;
-        out.push(CHARSET[((n >> 18) & 0x3f) as usize] as char);
-        out.push(CHARSET[((n >> 12) & 0x3f) as usize] as char);
-        out.push('=');
-        out.push('=');
-    } else if rem == 2 {
-        let n = ((bytes[i] as u32) << 16) | ((bytes[i + 1] as u32) << 8);
-        out.push(CHARSET[((n >> 18) & 0x3f) as usize] as char);
-        out.push(CHARSET[((n >> 12) & 0x3f) as usize] as char);
-        out.push(CHARSET[((n >> 6) & 0x3f) as usize] as char);
-        out.push('=');
-    }
-    out
-}`;
-};
+): string =>
+  fill(coerceRowTmpl, {
+    boolCols: rustStrSlice(booleanFields.map((f) => f.name)),
+    binCols: rustStrSlice(binaryFields.map((f) => f.name)),
+  }).trimEnd();
 
 const partitionFieldsByType = (
   fields: Field[],
@@ -465,6 +384,7 @@ const renderReadOnly = (
     entitySnake,
     path,
     idTypeVariant: idTypeVariantForPk(pk),
+    hasByFields: normalizedByFields.length > 0,
     byFieldMerges: byFieldMergeChain(
       entitySnake,
       naming.apiPath(entitySnake),
@@ -472,9 +392,7 @@ const renderReadOnly = (
       false,
     ),
   };
-  const tmpl =
-    normalizedByFields.length > 0 ? readonlyByFieldsTmpl : readonlyPlainTmpl;
-  return content(naming.filePath(entitySnake), fill(tmpl, tokens));
+  return content(naming.filePath(entitySnake), fill(readonlyTmpl, tokens));
 };
 
 const renderCrud = (
@@ -528,6 +446,7 @@ const renderCrud = (
       ? "Some(Arc::new(|row: &mut RowMap| coerce_row_types(row)))"
       : "None",
     hasCoercion,
+    hasByFields,
     createValidator,
     updateValidator,
     coerceFn,
@@ -538,8 +457,7 @@ const renderCrud = (
       hasCoercion,
     ),
   };
-  const tmpl = hasByFields ? crudByFieldsTmpl : crudPlainTmpl;
-  return content(naming.filePath(entitySnake), fill(tmpl, tokens));
+  return content(naming.filePath(entitySnake), fill(crudTmpl, tokens));
 };
 
 const renderEntityRouter = (
@@ -555,35 +473,38 @@ const renderAppWiring = (
   opts: EmitOptions,
 ): GenerateEntry => {
   const { naming } = opts;
-  const imports = candidates.map((c) =>
-    naming.serviceUseLine(c.name, naming.serviceClassName(c.name)),
-  );
-  const lets = candidates.map(
-    (c) =>
-      `    let ${serviceFieldName(c.name)} = std::sync::Arc::new(${naming.serviceClassName(c.name)}::from_context(ctx)?);`,
-  );
-  const merges = candidates.map(
-    (c) =>
-      `        .merge(${naming.routeModulePath(c.name)}::router(${serviceFieldName(c.name)}.clone()))`,
-  );
-  const body =
-    merges.length > 0
-      ? `${lets.join("\n")}${lets.length > 0 ? "\n\n" : ""}    let router = axum::Router::new()\n${merges.join("\n")};\n    Ok(router)`
-      : `    Ok(axum::Router::new())`;
+  const services = candidates.map((c) => ({
+    fieldName: serviceFieldName(c.name),
+    className: naming.serviceClassName(c.name),
+    routeModule: naming.routeModulePath(c.name),
+  }));
   return content(
     naming.appWiringFilePath(),
-    fill(appWiringTmpl, { imports, body }),
+    fill(appWiringTmpl, {
+      imports: candidates.map((c) =>
+        naming.serviceUseLine(c.name, naming.serviceClassName(c.name)),
+      ),
+      body: fill(appWiringBodyTmpl, {
+        hasServices: services.length > 0,
+        services,
+      }).trimEnd(),
+    }),
   );
 };
 
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
-  const ds = datasourceSettings(ctx.settings);
-  const parsed = await loadRoutes(ctx.reader, { idType: ds.idType });
+  const parser = new SpecificationParser(ctx.reader);
+  const parsed = await parser.loadRoutes({
+    idType: ctx.settings["datasource.id_type"] ?? "integer",
+  });
+  const views = (await ctx.reader.exists("view_types.yaml"))
+    ? await parser.loadViewTypes()
+    : [];
   const opts = await emitOptions(
     ctx.settings,
-    ctx.reader,
+    views,
     parsed.nested,
     parsed.datasources,
   );

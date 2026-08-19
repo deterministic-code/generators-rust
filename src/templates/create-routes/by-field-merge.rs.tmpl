@@ -1,0 +1,10 @@
+    .merge(create_by_field_router(ByFieldRouterConfig {
+        service: service.clone(),
+        entity_name: "{{entitySnake}}".to_string(),
+        base_path: "{{path}}".to_string(),
+        field: "{{byField}}".to_string(),
+        unique: {{unique}},
+        methods: vec![deterministic::routes::ByFieldMethod::Get],
+        coerce_row: {{{coerceExpr}}},
+        update_validator: None,
+    }))

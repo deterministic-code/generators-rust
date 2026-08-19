@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { memoryReader } from "./common/deterministic-reader.ts";
-import { DATASOURCE_TYPES_YAML } from "./common/parse-datasource-types.ts";
-import type { GenerateEntry } from "./common/generate-entry.ts";
+import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
+import {
+  DATASOURCE_TYPES_YAML,
+} from "./specification-parser.ts";
+import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "./generate-datasource-types-tests.ts";
 
 const FIXTURE_YAML = `types:
@@ -100,19 +102,6 @@ describe("generate datasource types tests", () => {
     );
   });
 
-  it("nests tests under features/__tests__ when organize_by_feature is set", async () => {
-    const nested = await generateWith({
-      "other.organize_by_feature": "true",
-    });
-    assert.deepEqual(
-      nested.map((e) => e.filename).sort(),
-      [
-        "features/role/__tests__/role_tests.rs",
-        "features/user/__tests__/user_tests.rs",
-      ],
-    );
-  });
-
   it("imports the generated type from the sibling module", async () => {
     const user = await userBody();
     assert.match(user, /use super::user::\*;/);
@@ -157,10 +146,7 @@ describe("generate datasource types tests", () => {
     assert.doesNotMatch(user, /fn gets_uuid\(/);
     assert.doesNotMatch(user, /fn sets_uuid\(/);
     assert.match(user, /let initial = uuid::Uuid::nil\(\);/);
-    assert.match(
-      user,
-      /role_id: String::from\("00000000-0000-0000-0000-000000000000"\)/,
-    );
+    assert.match(user, /role_id: uuid::Uuid::nil\(\),/);
   });
 
   it("uses i64 ids when datasource.id_type=biginteger", async () => {
@@ -180,21 +166,5 @@ describe("generate datasource types tests", () => {
   it("writes codegen.schema_version into the file header", async () => {
     const user = await userBody({ "codegen.schema_version": "9.9" });
     assert.match(user, /schema-version: 9.9/);
-  });
-
-  it("fields casing changes getter and setter identifiers", async () => {
-    const camel = await userBody({
-      "languages.rust.casing.fields": "camel",
-    });
-    assert.match(camel, /fn gets_nickName\(/);
-    assert.match(camel, /fn sets_nickName\(/);
-    assert.match(camel, /value\.nickName = next.clone\(\);/);
-  });
-
-  it("types casing changes the struct name", async () => {
-    const user = await userBody({
-      "languages.rust.casing.types": "camel",
-    });
-    assert.match(user, /fn sample\(\) -> user \{/);
   });
 });

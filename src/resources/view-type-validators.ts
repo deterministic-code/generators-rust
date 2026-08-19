@@ -6,4 +6,16 @@ const resource = (rel: string): Promise<string> =>
     "utf8",
   );
 
-export const typeTmpl = await resource("type.rs.tmpl");
+export const [
+  typeTmpl,
+  checkArrayNullableTmpl,
+  checkArrayTmpl,
+  checkNullableTmpl,
+  checkRequiredTmpl,
+] = await Promise.all([
+  resource("type.rs.tmpl"),
+  resource("check-array-nullable.rs.tmpl"),
+  resource("check-array.rs.tmpl"),
+  resource("check-nullable.rs.tmpl"),
+  resource("check-required.rs.tmpl"),
+]);

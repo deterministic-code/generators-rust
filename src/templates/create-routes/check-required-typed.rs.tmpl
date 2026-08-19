@@ -1,0 +1,5 @@
+    match body.get("{{name}}").filter(|v| !v.is_null()) {
+        None => errors.push("{{name}}: required".to_string()),
+        Some(v) if !v.{{typeCheck}}() => errors.push("{{name}}: expected {{type}}".to_string()),
+        _ => {}
+    }

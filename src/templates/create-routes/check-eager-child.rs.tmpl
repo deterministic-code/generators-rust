@@ -1,0 +1,14 @@
+    match body.get({{&nameJson}}) {
+        None => {}
+        Some(v) if v.is_null() => {}
+        Some(v) => match v {
+            serde_json::Value::Array(arr) => {
+                for (i, item) in arr.iter().enumerate() {
+                    if !item.is_object() {
+                        errors.push(format!("{{name}}[{}]: expected object", i));
+                    }
+                }
+            }
+            _ => errors.push("{{name}}: expected array".to_string()),
+        }
+    }

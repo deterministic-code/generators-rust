@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { memoryReader } from "./common/deterministic-reader.ts";
-import { DATASOURCE_TYPES_YAML } from "./common/parse-datasource-types.ts";
-import { VIEW_TYPES_YAML } from "./common/parse-view-types.ts";
-import type { GenerateEntry } from "./common/generate-entry.ts";
+import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
+import {
+  DATASOURCE_TYPES_YAML,
+  VIEW_TYPES_YAML,
+} from "./specification-parser.ts";
+import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "./generate-view-type-validators.ts";
 
 const DS_YAML = `types:

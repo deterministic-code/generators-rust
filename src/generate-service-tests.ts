@@ -1,5 +1,5 @@
-import type { GenerateContext } from "./common/generate-context.ts";
-import type { GenerateEntry } from "./common/generate-entry.ts";
+import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
+import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 
 /** Retired: per-entity service unit tests used the removed inline `::new` API. */
 export const generate = async (

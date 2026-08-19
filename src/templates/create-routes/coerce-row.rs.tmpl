@@ -1,0 +1,62 @@
+fn coerce_row_types(row: &mut RowMap) {
+    let bool_cols: &[&str] = {{{boolCols}}};
+    let binary_cols: &[&str] = {{{binCols}}};
+    for col in bool_cols {
+        if let Some(v) = row.get(*col).cloned() {
+            match v {
+                Value::Number(n) => {
+                    if let Some(i) = n.as_i64() {
+                        row.insert((*col).to_string(), Value::Bool(i != 0));
+                    }
+                }
+                Value::Bool(_) | Value::Null => {}
+                _ => {}
+            }
+        }
+    }
+    for col in binary_cols {
+        if let Some(v) = row.get(*col).cloned() {
+            match v {
+                Value::Array(arr) => {
+                    let bytes: Vec<u8> = arr
+                        .iter()
+                        .filter_map(|x| x.as_u64().and_then(|n| u8::try_from(n).ok()))
+                        .collect();
+                    let encoded = base64_encode(&bytes);
+                    row.insert((*col).to_string(), Value::String(encoded));
+                }
+                Value::Null | Value::String(_) => {}
+                _ => {}
+            }
+        }
+    }
+}
+
+fn base64_encode(bytes: &[u8]) -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
+    let mut i = 0;
+    while i + 3 <= bytes.len() {
+        let n = ((bytes[i] as u32) << 16) | ((bytes[i + 1] as u32) << 8) | (bytes[i + 2] as u32);
+        out.push(CHARSET[((n >> 18) & 0x3f) as usize] as char);
+        out.push(CHARSET[((n >> 12) & 0x3f) as usize] as char);
+        out.push(CHARSET[((n >> 6) & 0x3f) as usize] as char);
+        out.push(CHARSET[(n & 0x3f) as usize] as char);
+        i += 3;
+    }
+    let rem = bytes.len() - i;
+    if rem == 1 {
+        let n = (bytes[i] as u32) << 16;
+        out.push(CHARSET[((n >> 18) & 0x3f) as usize] as char);
+        out.push(CHARSET[((n >> 12) & 0x3f) as usize] as char);
+        out.push('=');
+        out.push('=');
+    } else if rem == 2 {
+        let n = ((bytes[i] as u32) << 16) | ((bytes[i + 1] as u32) << 8);
+        out.push(CHARSET[((n >> 18) & 0x3f) as usize] as char);
+        out.push(CHARSET[((n >> 12) & 0x3f) as usize] as char);
+        out.push(CHARSET[((n >> 6) & 0x3f) as usize] as char);
+        out.push('=');
+    }
+    out
+}

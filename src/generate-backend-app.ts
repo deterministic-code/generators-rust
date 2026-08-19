@@ -1,6 +1,6 @@
-import { fill } from "./common/fill.ts";
-import type { GenerateContext } from "./common/generate-context.ts";
-import { content, patch, type GenerateEntry } from "./common/generate-entry.ts";
+import { fill } from "@deterministic-code/generators-common/fill";
+import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
+import { content, patch, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
   cargoToml,
   dockerComposeYml,

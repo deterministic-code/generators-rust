@@ -1,37 +1,56 @@
 import { snakeCase } from "change-case";
+import { fill } from "@deterministic-code/generators-common/fill";
+import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
+import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
+import { viewPaths, type ArtifactPaths } from "./common/paths.ts";
 import {
-  datasourceSettings,
-  type DatasourceSettings,
-} from "./common/datasource-settings.ts";
-import { fill } from "./common/fill.ts";
-import type { GenerateContext, SettingsDict } from "./common/generate-context.ts";
-import { content, type GenerateEntry } from "./common/generate-entry.ts";
-import { rustNaming, type ArtifactNaming } from "./common/naming.ts";
-import {
-  loadViewTypes,
+  SpecificationParser,
   type ShapedView,
   type ViewField,
   type ViewType,
-} from "./common/parse-view-types.ts";
-import { settingsStr } from "./common/settings.ts";
-import { typeTmpl } from "./resources/view-type-validators.ts";
+} from "./specification-parser.ts";
+import {
+  checkArrayNullableTmpl,
+  checkArrayTmpl,
+  checkNullableTmpl,
+  checkRequiredTmpl,
+  typeTmpl,
+} from "./resources/view-type-validators.ts";
+
+type Datasource = {
+  idType: string;
+  datetimeRepr: string;
+  withUuidColumn: boolean;
+  useOptimisticConcurrency: boolean;
+};
+
+const datasource = (settings: Record<string, string>): Datasource => {
+  const idType = settings["datasource.id_type"] ?? "integer";
+  return {
+    idType,
+    datetimeRepr: settings["datasource.datetime"] ?? "native",
+    withUuidColumn: idType !== "uuid",
+    useOptimisticConcurrency:
+      settings["datasource.use_optimistic_concurrency"] === "true",
+  };
+};
 
 type EmitOptions = {
-  ds: DatasourceSettings;
-  naming: ArtifactNaming;
+  ds: Datasource;
+  naming: ArtifactPaths;
   schemaVersion: string;
 };
 
-const emitOptions = (settings: SettingsDict): EmitOptions => ({
-  ds: datasourceSettings(settings),
-  naming: rustNaming(settings),
-  schemaVersion: settingsStr(settings, "codegen.schema_version") ?? "1.0",
+const emitOptions = (settings: Record<string, string>): EmitOptions => ({
+  ds: datasource(settings),
+  naming: viewPaths(settings),
+  schemaVersion: settings["codegen.schema_version"] ?? "1.0",
 });
 
 const typePath = (
   entity: string,
   kind: "datasource" | "view",
-  naming: ArtifactNaming,
+  naming: ArtifactPaths,
 ): string => {
   const cls = naming.className(entity);
   if (naming.byFeature) {
@@ -52,7 +71,7 @@ const typePath = (
 const validatorFn = (
   entity: string,
   kind: "datasource" | "view",
-  naming: ArtifactNaming,
+  naming: ArtifactPaths,
 ): string => {
   const fn =
     kind === "datasource"
@@ -89,18 +108,16 @@ const checkField = (field: ViewField, opts: EmitOptions): string => {
   if (field.kind === "primitive") return "";
   const fn = validatorFn(field.base, field.kind, opts.naming);
   if (field.isArray) {
-    if (field.isNullable) {
-      return `    if let Some(arr) = &${access} { for item in arr { if let Err(mut e) = ${fn}(item) { errors.append(&mut e); } } }`;
-    }
-    return `    for item in &${access} { if let Err(mut e) = ${fn}(item) { errors.append(&mut e); } }`;
+    const tmpl = field.isNullable ? checkArrayNullableTmpl : checkArrayTmpl;
+    return fill(tmpl, { access, fn }).trimEnd();
   }
   if (field.isNullable) {
-    return `    if let Some(inner) = &${access} { if let Err(mut e) = ${fn}(inner) { errors.append(&mut e); } }`;
+    return fill(checkNullableTmpl, { access, fn }).trimEnd();
   }
-  return `    if let Err(mut e) = ${fn}(&${access}) { errors.append(&mut e); }`;
+  return fill(checkRequiredTmpl, { fn, arg: `&${access}` }).trimEnd();
 };
 
-const validatorPath = (entity: string, naming: ArtifactNaming): string =>
+const validatorPath = (entity: string, naming: ArtifactPaths): string =>
   naming.byFeature
     ? naming.filePath(entity).replace(/\.rs$/, "_validator.rs")
     : `${naming.fileBase(entity)}_validator.rs`;
@@ -111,7 +128,7 @@ const shapedBody = (view: ShapedView, opts: EmitOptions) => {
     const fn = validatorFn(view.inherits, "datasource", opts.naming);
     const arg = isAlias(view) ? "obj" : "&obj.base";
     checks.push(
-      `    if let Err(mut e) = ${fn}(${arg}) { errors.append(&mut e); }`,
+      fill(checkRequiredTmpl, { fn, arg }).trimEnd(),
     );
   }
   for (const line of view.fields.map((f) => checkField(f, opts))) {
@@ -166,6 +183,6 @@ export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   const opts = emitOptions(ctx.settings);
-  const views = await loadViewTypes(ctx.reader);
+  const views = await new SpecificationParser(ctx.reader).loadViewTypes();
   return views.map((view) => renderView(view, opts));
 };

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { memoryReader } from "./common/deterministic-reader.ts";
-import type { GenerateEntry } from "./common/generate-entry.ts";
+import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
+import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "./generate-routes.ts";
 
 const DS_YAML = `types:
@@ -130,37 +130,6 @@ routes: []
     assert.match(orders, /use_optimistic_concurrency: true/);
     const users = textOf(entries, "users.rs");
     assert.match(users, /use_optimistic_concurrency: true/);
-  });
-
-  it("places routers under features/ when by-feature", async () => {
-    const entries = await generate({
-      reader: memoryReader({
-        "datasource_types.yaml": DS_YAML,
-        "view_types.yaml": VIEW_YAML,
-        "routes.yaml": `includes:
-  - view_type_routes:
-      filter: 'type == "user"'
-routes: []
-`,
-      }),
-      settings: { "other.organize_by_feature": "true" },
-    });
-    const paths = entries.map((e) => e.filename).sort();
-    assert.ok(
-      paths.includes("features/user/users_router.rs"),
-      `got: ${paths.join(", ")}`,
-    );
-    assert.ok(paths.includes("features/app_wiring.rs"));
-    const users = textOf(entries, "features/user/users_router.rs");
-    assert.match(
-      users,
-      /use crate::features::user::user_service::UserService;/,
-    );
-    const wiring = textOf(entries, "features/app_wiring.rs");
-    assert.match(
-      wiring,
-      /crate::features::user::users_router::router/,
-    );
   });
 
   it("rejects missing routes.yaml", async () => {

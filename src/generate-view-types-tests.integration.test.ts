@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { memoryReader } from "./common/deterministic-reader.ts";
-import { DATASOURCE_TYPES_YAML } from "./common/parse-datasource-types.ts";
-import { VIEW_TYPES_YAML } from "./common/parse-view-types.ts";
-import type { GenerateEntry } from "./common/generate-entry.ts";
+import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
+import {
+  DATASOURCE_TYPES_YAML,
+  VIEW_TYPES_YAML,
+} from "./specification-parser.ts";
+import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "./generate-view-types-tests.ts";
 
 const DS_YAML = `types:
@@ -315,22 +317,6 @@ types: []
     assert.match(user, /fn allows_setting_nick_name_to_none\(/);
   });
 
-  it("nests tests under features/__tests__ and qualifies nested types", async () => {
-    const nested = await generateWith({
-      "other.organize_by_feature": "true",
-    });
-    const names = nested.map((e) => e.filename).sort();
-    assert.ok(
-      names.includes("features/card_payment/__tests__/card_payment_tests.rs"),
-    );
-    assert.ok(names.includes("features/user/__tests__/user_tests.rs"));
-    const card = await bodyOf("card_payment_tests.rs", {
-      "other.organize_by_feature": "true",
-    });
-    assert.match(card, /crate::features::tag::tag::Tag \{/);
-    assert.match(card, /crate::features::user_summary::user_summary::UserSummary \{/);
-  });
-
   it("writes codegen.schema_version into the file header", async () => {
     const card = await bodyOf("card_payment_tests.rs", {
       "codegen.schema_version": "9.9",
@@ -356,33 +342,6 @@ types: []
       "datasource.id_type": "biginteger",
     });
     assert.match(user, /id: 1i64,/);
-  });
-
-  it("fields casing changes getter and setter identifiers", async () => {
-    const camel = await bodyOf("user_summary_tests.rs", {
-      "languages.rust.casing.fields": "camel",
-    });
-    assert.match(camel, /fn gets_displayName\(/);
-    assert.match(camel, /value\.displayName = next.clone\(\);/);
-  });
-
-  it("types casing changes the struct name", async () => {
-    const card = await bodyOf("card_payment_tests.rs", {
-      "languages.rust.casing.types": "camel",
-    });
-    assert.match(card, /fn sample\(\) -> cardPayment \{/);
-  });
-
-  it("file_names casing changes the emitted filename", async () => {
-    const emitted = await generateWith(
-      { "languages.rust.casing.file_names": "pascal" },
-      SIMPLE_VIEW_YAML,
-      undefined,
-    );
-    assert.equal(
-      emitted.some((e) => e.filename === "CardPayment_tests.rs"),
-      true,
-    );
   });
 
   it("rejects a cyclic view reference", async () => {
