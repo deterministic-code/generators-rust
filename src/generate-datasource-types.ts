@@ -3,16 +3,16 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { datasourcePaths, type ArtifactPaths } from "./common/paths.ts";
 import {
+  inheritedIdType,
   SpecificationParser,
   type DatasourceType,
 } from "./specification-parser.ts";
-import { nativeFieldType } from "./common/type-converter.ts";
+import { convertSpecType } from "./base-type-converter.ts";
 import { typeTmpl } from "./resources/datasource-types.ts";
 import { systemColumnsInjectedFor } from "./system-columns.ts";
 
 type Datasource = {
   idType: string;
-  datetimeRepr: string;
   withUuidColumn: boolean;
   useOptimisticConcurrency: boolean;
 };
@@ -21,7 +21,6 @@ const datasource = (settings: Record<string, string>): Datasource => {
   const idType = settings["datasource.id_type"] ?? "integer";
   return {
     idType,
-    datetimeRepr: settings["datasource.datetime"] ?? "native",
     withUuidColumn: idType !== "uuid",
     useOptimisticConcurrency:
       settings["datasource.use_optimistic_concurrency"] === "true",
@@ -79,22 +78,21 @@ const tableFields = (
         !declared.has(n) &&
         (n !== "uuid" || ds.withUuidColumn),
     )
-    .map((name) => ({ name, ...SYSTEM[name] }));
+    .map((name) =>
+      name === "id"
+        ? { name, type: inheritedIdType(ds.idType), isNullable: false }
+        : { name, ...SYSTEM[name] },
+    );
   return [...system, ...table.fields].filter(
     (f) => ds.withUuidColumn || f.name !== "uuid",
   );
 };
 
-const rustTypeFor = (
-  field: {
-    name: string;
-    type: string;
-    isNullable: boolean;
-    references?: string;
-  },
-  ds: Datasource,
-): string => {
-  const t = nativeFieldType(ds, field);
+const rustTypeFor = (field: {
+  type: string;
+  isNullable: boolean;
+}): string => {
+  const t = convertSpecType(field.type);
   return field.isNullable ? `Option<${t}>` : t;
 };
 
@@ -116,7 +114,7 @@ const renderType = (
       fieldCount: String(fields.length),
       fields: fields.map((f) => ({
         ident: naming.fieldName(f.name),
-        rustType: rustTypeFor(f, ds),
+        rustType: rustTypeFor(f),
       })),
     }),
   );

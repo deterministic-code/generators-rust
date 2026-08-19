@@ -4,21 +4,18 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { datasourcePaths, type ArtifactPaths } from "./common/paths.ts";
 import {
+  inheritedIdType,
   SpecificationParser,
   type DatasourceField,
   type DatasourceType,
 } from "./specification-parser.ts";
-import {
-  idTypeLiteralSuffix,
-  intLiteralSuffix,
-} from "./common/type-converter.ts";
+import { convertSpecType } from "./base-type-converter.ts";
 import { isFiniteInt, isFiniteNumber } from "@deterministic-code/generators-common/yaml-entry";
 import { typeTmpl } from "./resources/datasource-type-validators.ts";
 import { systemColumnsInjectedFor } from "./system-columns.ts";
 
 type Datasource = {
   idType: string;
-  datetimeRepr: string;
   withUuidColumn: boolean;
   useOptimisticConcurrency: boolean;
 };
@@ -27,7 +24,6 @@ const datasource = (settings: Record<string, string>): Datasource => {
   const idType = settings["datasource.id_type"] ?? "integer";
   return {
     idType,
-    datetimeRepr: settings["datasource.datetime"] ?? "native",
     withUuidColumn: idType !== "uuid",
     useOptimisticConcurrency:
       settings["datasource.use_optimistic_concurrency"] === "true",
@@ -73,7 +69,6 @@ const rawChecks = (
   field: DatasourceField,
   prop: string,
   ref: string,
-  idType: string,
 ): string[] => {
   const { type, name, minSize, size, references } = field;
   switch (type) {
@@ -98,8 +93,7 @@ const rawChecks = (
     case "smallinteger":
     case "biginteger":
     case "reference": {
-      const suffix =
-        name === "id" ? idTypeLiteralSuffix(idType) : intLiteralSuffix(type);
+      const suffix = convertSpecType(type);
       const idLike =
         name === "id" ||
         name.endsWith("_id") ||
@@ -154,7 +148,7 @@ const checksForField = (
       pad(
         1,
         errIf(
-          `obj.${prop} < 0${idTypeLiteralSuffix(idType)}`,
+          `obj.${prop} < 0${convertSpecType(inheritedIdType(idType))}`,
           `${prop}: must be nonnegative`,
         ),
       ),
@@ -162,7 +156,7 @@ const checksForField = (
   }
   const stringLike = field.type === "string" || field.type === "uuid";
   const ref = field.isNullable ? (stringLike ? "v" : "*v") : `obj.${prop}`;
-  const inner = rawChecks(field, prop, ref, idType);
+  const inner = rawChecks(field, prop, ref);
   if (inner.length === 0) return [];
   if (!field.isNullable) return inner.map((l) => pad(1, l));
   return [

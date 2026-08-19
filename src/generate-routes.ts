@@ -6,8 +6,9 @@ import {
   routePaths,
   type RoutePaths,
 } from "./common/paths.ts";
-import { idTypeToNative } from "./common/type-converter.ts";
+import { convertSpecType } from "./base-type-converter.ts";
 import {
+  inheritedIdType,
   SpecificationParser,
   entityUsesOptimisticConcurrency,
   type DatasourceField,
@@ -86,7 +87,7 @@ const emitOptions = async (
   return {
     naming: routePaths(settings),
     idType,
-    rustIdType: idTypeToNative(idType),
+    rustIdType: convertSpecType(inheritedIdType(idType)),
     useOptimisticConcurrency:
       settings["datasource.use_optimistic_concurrency"] === "true",
     views,
