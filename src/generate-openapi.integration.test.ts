@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { memoryReader } from "./common/deterministic-reader.ts";
-import type { GenerateEntry } from "./common/generate-entry.ts";
+import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
+import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "./generate-openapi.ts";
 
 const textOf = (entries: GenerateEntry[], path: string): string => {

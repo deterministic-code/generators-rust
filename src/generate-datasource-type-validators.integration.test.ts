@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { memoryReader } from "./common/deterministic-reader.ts";
-import { DATASOURCE_TYPES_YAML } from "./common/parse-datasource-types.ts";
-import type { GenerateEntry } from "./common/generate-entry.ts";
+import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
+import {
+  DATASOURCE_TYPES_YAML,
+} from "./specification-parser.ts";
+import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "./generate-datasource-type-validators.ts";
 
 const FIXTURE_YAML = `types:
@@ -94,19 +96,6 @@ describe("generate datasource type validators", () => {
     );
   });
 
-  it("nests validators under features when organize_by_feature is set", async () => {
-    const nested = await generateWith({
-      "other.organize_by_feature": "true",
-    });
-    assert.deepEqual(
-      nested.map((e) => e.filename).sort(),
-      [
-        "features/role/role_validator.rs",
-        "features/user/user_validator.rs",
-      ],
-    );
-  });
-
   it("emits validate_datasource_* with nonnegative and length checks", async () => {
     const user = await userBody();
     assert.match(
@@ -118,14 +107,6 @@ describe("generate datasource type validators", () => {
     assert.match(user, /exceeds 256 chars/);
     assert.match(user, /must be at least 0/);
     assert.doesNotMatch(user, /nick_name/);
-  });
-
-  it("uses the by-feature type path when organize_by_feature is set", async () => {
-    const user = await userBody({ "other.organize_by_feature": "true" });
-    assert.match(
-      user,
-      /pub fn validate_datasource_user\(obj: &crate::features::user::user::User\)/,
-    );
   });
 
   it("drops uuid checks when datasource.id_type=uuid", async () => {

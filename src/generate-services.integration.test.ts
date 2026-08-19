@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { memoryReader } from "./common/deterministic-reader.ts";
-import type { GenerateEntry } from "./common/generate-entry.ts";
+import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
+import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "./generate-services.ts";
 
 const DS_YAML = `types:
@@ -94,52 +94,6 @@ describe("generate-services", () => {
     assert.match(health, /use serde_json::\{json, Value\};/);
     assert.match(health, /async fn check\(&self, _args: Value\)/);
     assert.match(health, /Ok\(json!\(\{ "status": "ok" \}\)\)/);
-  });
-
-  it("places custom stubs under features/…/custom when by-feature", async () => {
-    const entries = await generate({
-      reader: fixtureReader({
-        "datasource_types.yaml": DS_YAML,
-        "view_types.yaml": VIEW_YAML,
-        "services.yaml": `includes:
-  - view_type_services:
-      filter: 'type == "user"'
-services: []
-`,
-      }),
-      settings: { "other.organize_by_feature": "true" },
-    });
-
-    const paths = entries.map((e) => e.filename).sort();
-    assert.ok(
-      paths.includes("features/user/user_service.rs"),
-      `got: ${paths.join(", ")}`,
-    );
-    assert.ok(
-      paths.includes("features/health_check/custom/health_check_service.rs"),
-      `got: ${paths.join(", ")}`,
-    );
-  });
-
-  it("rejects by-feature custom modules outside features/", async () => {
-    await assert.rejects(
-      () =>
-        generate({
-          reader: fixtureReader({
-            "datasource_types.yaml": DS_YAML,
-            "view_types.yaml": VIEW_YAML,
-            "services.yaml": `includes:
-  - view_type_services:
-      filter: 'false'
-services:
-  - name: WeirdService
-    module: ./elsewhere/weird
-`,
-          }),
-          settings: { "other.organize_by_feature": "true" },
-        }),
-      /outside \.\/features\//,
-    );
   });
 
   it("rejects when services.yaml is missing", async () => {

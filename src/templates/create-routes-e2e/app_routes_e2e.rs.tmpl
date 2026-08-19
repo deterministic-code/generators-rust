@@ -1,0 +1,14 @@
+use axum::body::Body;
+use axum::http::{Request as HttpRequest, StatusCode};
+use tower::ServiceExt;
+
+use deterministic::loaders::{GenericRouteSpec, HttpMethod, ResponseFormat};
+use deterministic::repositories::inmemory::InMemoryCrudRepository;
+use deterministic::services::DynamicService;
+use deterministic::{
+    build_router, GenericCrudService, ServiceRegistryBuilder,
+};
+
+{{{setups}}}
+
+{{{tests}}}

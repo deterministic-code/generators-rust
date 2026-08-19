@@ -1,32 +1,41 @@
 import { snakeCase } from "change-case";
+import { fill } from "@deterministic-code/generators-common/fill";
+import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
+import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
+import { viewPaths, type ArtifactPaths } from "./common/paths.ts";
 import {
-  datasourceSettings,
-  nativeFieldType,
   tableFields,
-  type DatasourceSettings,
-} from "./common/datasource-settings.ts";
-import { fill } from "./common/fill.ts";
-import type { GenerateContext, SettingsDict } from "./common/generate-context.ts";
-import { content, type GenerateEntry } from "./common/generate-entry.ts";
-import { rustNaming, type ArtifactNaming } from "./common/naming.ts";
-import {
+  SpecificationParser,
   DATASOURCE_TYPES_YAML,
-  parseDatasourceTypes,
   type DatasourceType,
-} from "./common/parse-datasource-types.ts";
-import {
-  loadViewTypes,
   type ShapedView,
   type ViewField,
   type ViewType,
-} from "./common/parse-view-types.ts";
-import { settingsStr } from "./common/settings.ts";
-import { convertSpecType } from "./common/type-converter.ts";
+} from "./specification-parser.ts";
+import { convertSpecType, nativeFieldType } from "./common/type-converter.ts";
 import { typeTestTmpl } from "./resources/view-type-validators-tests.ts";
 
+type Datasource = {
+  idType: string;
+  datetimeRepr: string;
+  withUuidColumn: boolean;
+  useOptimisticConcurrency: boolean;
+};
+
+const datasource = (settings: Record<string, string>): Datasource => {
+  const idType = settings["datasource.id_type"] ?? "integer";
+  return {
+    idType,
+    datetimeRepr: settings["datasource.datetime"] ?? "native",
+    withUuidColumn: idType !== "uuid",
+    useOptimisticConcurrency:
+      settings["datasource.use_optimistic_concurrency"] === "true",
+  };
+};
+
 type EmitOptions = {
-  ds: DatasourceSettings;
-  naming: ArtifactNaming;
+  ds: Datasource;
+  naming: ArtifactPaths;
   schemaVersion: string;
   tables: Map<string, DatasourceType>;
   views: Map<string, ViewType>;
@@ -44,10 +53,10 @@ type CaseTok = {
   assertion: string;
 };
 
-const emitBase = (settings: SettingsDict) => ({
-  ds: datasourceSettings(settings),
-  naming: rustNaming(settings),
-  schemaVersion: settingsStr(settings, "codegen.schema_version") ?? "1.0",
+const emitBase = (settings: Record<string, string>) => ({
+  ds: datasource(settings),
+  naming: viewPaths(settings),
+  schemaVersion: settings["codegen.schema_version"] ?? "1.0",
 });
 
 const rustString = (value: string): string =>
@@ -122,7 +131,7 @@ const wrapValue = (
 const qual = (
   entity: string,
   kind: "datasource" | "view",
-  naming: ArtifactNaming,
+  naming: ArtifactPaths,
 ): string => {
   const cls = naming.className(entity);
   if (naming.byFeature) {
@@ -140,7 +149,7 @@ const renderDs = (name: string, opts: EmitOptions): string => {
   const table = opts.tables.get(name);
   const cls = qual(name, "datasource", opts.naming);
   if (table === undefined) return `${cls} {}`;
-  const body = tableFields(table.fields, opts.ds)
+  const body = tableFields(table.fields, opts.ds.idType)
     .map((f) => {
       const { sample } = samplesForNative(nativeFieldType(opts.ds, f), f.type);
       const val = f.isNullable ? `Some(${sample})` : sample;
@@ -158,7 +167,7 @@ const parentToks = (view: ShapedView, opts: EmitOptions): FieldTok[] => {
     ...view.omit,
     ...view.enrichments.map((e) => e.fkColumn),
   ]);
-  return tableFields(table.fields, opts.ds)
+  return tableFields(table.fields, opts.ds.idType)
     .filter((f) => !omit.has(f.name))
     .map((f) => {
       const pair = samplesForNative(nativeFieldType(opts.ds, f), f.type);
@@ -226,7 +235,7 @@ const viewFixture = (
   return `${cls} { ${fields.map((f) => `${f.ident}: ${f.sampleExpr}`).join(", ")} }`;
 };
 
-const testPath = (entity: string, naming: ArtifactNaming): string => {
+const testPath = (entity: string, naming: ArtifactPaths): string => {
   const file = `${naming.fileBase(entity)}_tests.rs`;
   if (!naming.byFeature) return file;
   const typeFile = naming.filePath(entity);
@@ -276,9 +285,9 @@ export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   const base = emitBase(ctx.settings);
-  const views = await loadViewTypes(ctx.reader);
+  const views = await new SpecificationParser(ctx.reader).loadViewTypes();
   const tables = (await ctx.reader.exists(DATASOURCE_TYPES_YAML))
-    ? parseDatasourceTypes({
+    ? new SpecificationParser().parseDatasourceTypes({
         yaml: await ctx.reader.read(DATASOURCE_TYPES_YAML),
         idType: base.ds.idType,
       })

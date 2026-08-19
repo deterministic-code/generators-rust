@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 {{{serviceImport}}}
-use deterministic::routes::{create_by_field_router, create_crud_router, ByFieldRouterConfig, CrudRouterConfig, IdType};
+use deterministic::routes::{ {{#hasByFields}}create_by_field_router, {{/hasByFields}}create_crud_router, {{#hasByFields}}ByFieldRouterConfig, {{/hasByFields}}CrudRouterConfig, IdType};
 use deterministic::RowMap;
 {{#hasCoercion}}
 use serde_json::Value;
@@ -9,7 +9,7 @@ use serde_json::Value;
 
 pub fn router(service: Arc<{{className}}>) -> axum::Router {
     create_crud_router(CrudRouterConfig {
-        service: service.clone(),
+        service: service{{#hasByFields}}.clone(){{/hasByFields}},
         entity_name: "{{entitySnake}}".to_string(),
         base_path: "{{path}}".to_string(),
         id_type: IdType::{{idTypeVariant}},

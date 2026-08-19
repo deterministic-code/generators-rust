@@ -1,17 +1,16 @@
 import { pascalCase, snakeCase } from "change-case";
-import { datasourceSettings } from "./common/datasource-settings.ts";
-import { fill } from "./common/fill.ts";
-import type { GenerateContext, SettingsDict } from "./common/generate-context.ts";
-import { content, type GenerateEntry } from "./common/generate-entry.ts";
+import { fill } from "@deterministic-code/generators-common/fill";
+import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
+import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
-  rustServiceNaming,
-  type ServiceNaming,
-} from "./common/naming.ts";
+  servicePaths,
+  type ServicePaths,
+} from "./common/paths.ts";
 import {
-  loadServices,
+  SpecificationParser,
   type CustomServiceEntry,
   type ServiceCandidate,
-} from "./common/parse-services.ts";
+} from "./specification-parser.ts";
 import { customStubTmpl, genericTmpl } from "./resources/services.ts";
 
 const STATUS_OK_DEFAULTS: Record<string, Record<string, string>> = {
@@ -21,11 +20,11 @@ const STATUS_OK_DEFAULTS: Record<string, Record<string, string>> = {
 };
 
 type EmitOptions = {
-  naming: ServiceNaming;
+  naming: ServicePaths;
 };
 
-const emitOptions = (settings: SettingsDict): EmitOptions => ({
-  naming: rustServiceNaming(settings),
+const emitOptions = (settings: Record<string, string>): EmitOptions => ({
+  naming: servicePaths(settings),
 });
 
 const moduleParts = (mod: string): string[] => {
@@ -41,7 +40,7 @@ const structNameFor = (entryName: string): string => {
 
 const resolveCustomGeneratePath = (
   entry: CustomServiceEntry,
-  naming: ServiceNaming,
+  naming: ServicePaths,
   byFeature: boolean,
 ): string => {
   const fileBase = naming.casedFileStem(entry.name);
@@ -123,9 +122,8 @@ export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   const opts = emitOptions(ctx.settings);
-  const ds = datasourceSettings(ctx.settings);
-  const { generics, customs } = await loadServices(ctx.reader, {
-    idType: ds.idType,
+  const { generics, customs } = await new SpecificationParser(ctx.reader).loadServices({
+    idType: ctx.settings["datasource.id_type"] ?? "integer",
     serviceClassName: opts.naming.serviceClassName,
   });
   return [

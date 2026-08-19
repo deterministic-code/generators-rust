@@ -1,6 +1,8 @@
-import type { GenerateContext } from "./common/generate-context.ts";
-import { content, patch, type GenerateEntry } from "./common/generate-entry.ts";
-import { DATASOURCE_TYPES_YAML } from "./common/parse-datasource-types.ts";
+import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
+import { content, patch, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
+import {
+  DATASOURCE_TYPES_YAML,
+} from "./specification-parser.ts";
 import { serverTmpl } from "./resources/perf-server.ts";
 
 export const generate = async (

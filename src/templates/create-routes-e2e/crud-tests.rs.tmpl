@@ -1,0 +1,66 @@
+#[tokio::test]
+async fn {{entity}}_list_returns_200() {
+    let router = setup_{{entity}}_router();
+    let req = HttpRequest::builder()
+        .method("GET")
+        .uri("/api/{{segment}}")
+        .body(Body::empty())
+        .unwrap();
+    let res = router.oneshot(req).await.unwrap();
+    assert_eq!(
+        res.status(),
+        StatusCode::OK,
+        "{{pascal}} list expected 200, got {}",
+        res.status()
+    );
+}
+
+#[tokio::test]
+async fn {{entity}}_post_accepts_sample_payload() {
+    let router = setup_{{entity}}_router();
+    let req = HttpRequest::builder()
+        .method("POST")
+        .uri("/api/{{segment}}")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{{{payload}}}"#))
+        .unwrap();
+    let res = router.oneshot(req).await.unwrap();
+    assert!(
+        res.status() == StatusCode::CREATED || res.status() == StatusCode::BAD_REQUEST,
+        "{{pascal}} POST expected 201 or 400, got {}",
+        res.status()
+    );
+}
+
+#[tokio::test]
+async fn {{entity}}_get_missing_returns_404() {
+    let router = setup_{{entity}}_router();
+    let req = HttpRequest::builder()
+        .method("GET")
+        .uri("/api/{{segment}}/{{missing}}")
+        .body(Body::empty())
+        .unwrap();
+    let res = router.oneshot(req).await.unwrap();
+    assert_eq!(
+        res.status(),
+        StatusCode::NOT_FOUND,
+        "{{pascal}} GET missing expected 404, got {}",
+        res.status()
+    );
+}
+
+#[tokio::test]
+async fn {{entity}}_delete_missing_returns_non_5xx() {
+    let router = setup_{{entity}}_router();
+    let req = HttpRequest::builder()
+        .method("DELETE")
+        .uri("/api/{{segment}}/{{missing}}")
+        .body(Body::empty())
+        .unwrap();
+    let res = router.oneshot(req).await.unwrap();
+    assert!(
+        res.status().as_u16() < 500,
+        "{{pascal}} DELETE missing expected non-5xx, got {}",
+        res.status()
+    );
+}

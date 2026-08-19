@@ -1,0 +1,33 @@
+#[tokio::test]
+async fn {{entity}}_list_returns_200() {
+    let router = setup_{{entity}}_router();
+    let req = HttpRequest::builder()
+        .method("GET")
+        .uri("/api/{{segment}}")
+        .body(Body::empty())
+        .unwrap();
+    let res = router.oneshot(req).await.unwrap();
+    assert_eq!(
+        res.status(),
+        StatusCode::OK,
+        "{{pascal}} list expected 200, got {}",
+        res.status()
+    );
+}
+
+#[tokio::test]
+async fn {{entity}}_get_missing_returns_404() {
+    let router = setup_{{entity}}_router();
+    let req = HttpRequest::builder()
+        .method("GET")
+        .uri("/api/{{segment}}/{{missing}}")
+        .body(Body::empty())
+        .unwrap();
+    let res = router.oneshot(req).await.unwrap();
+    assert_eq!(
+        res.status(),
+        StatusCode::NOT_FOUND,
+        "{{pascal}} GET missing expected 404, got {}",
+        res.status()
+    );
+}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { memoryReader } from "./common/deterministic-reader.ts";
+import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
 import { generate } from "./generate-perf-e2e-tests.ts";
 
 describe("generate-perf-e2e-tests", () => {
