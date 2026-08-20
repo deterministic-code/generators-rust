@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
-import { generate } from "./generate-perf-server.ts";
+import { generate } from "../src/generate-perf-server.ts";
 
 describe("generate-perf-server", () => {
   it("rejects a missing datasource_types.yaml", async () => {

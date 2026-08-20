@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
-import { generate } from "./generate-routes-e2e-test.ts";
+import { generate } from "../src/generate-routes-e2e-test.ts";
 
 describe("generate-routes-e2e-test", () => {
   it("emits nothing when datasource_types.yaml is absent", async () => {

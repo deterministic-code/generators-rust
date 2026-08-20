@@ -1,0 +1,15 @@
+
+    #[tokio::test]
+    async fn get_{{entitySnake}}_by_{{byField}}_returns_items() {
+        let res = setup()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("{{mountPath}}/{{kebab}}/x")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }

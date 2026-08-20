@@ -13,10 +13,12 @@ pub struct {{structName}} {
 }
 
 impl {{structName}} {
+    pub fn from_inner(inner: Arc<dyn DynamicService>) -> Self {
+        Self { inner }
+    }
+
     pub fn from_context(ctx: &ComposeContext) -> Result<Self, RepositoryError> {
-        Ok(Self {
-            inner: ctx.entity_service({{entitySnakeLiteral}})?,
-        })
+        Ok(Self::from_inner(ctx.entity_service({{entitySnakeLiteral}})?))
     }
 }
 

@@ -1,0 +1,69 @@
+#[cfg(test)]
+mod tests {
+    use super::{{fileBase}}::*;
+    use deterministic::repositories::sqlite::{
+        SqliteDatasource, SqliteDatasourceOptions, SqliteStandardRepository,
+    };
+    use deterministic::repositories::RowMap;
+    use deterministic::routes::CrudService;
+    use deterministic::services::GenericCrudService;
+    use deterministic::Datasource;
+    use serde_json::json;
+    use std::sync::Arc;
+
+    async fn service() -> {{structName}} {
+        let mut ds = SqliteDatasource::new(SqliteDatasourceOptions::in_memory());
+        ds.open().await.expect("open sqlite");
+        let ds = Arc::new(ds);
+        ds.query(
+            "CREATE TABLE {{entity}} (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT, created TEXT, updated TEXT)",
+            &[],
+        )
+        .await
+        .expect("create table");
+        let repo = SqliteStandardRepository::new(Arc::clone(&ds), "{{entity}}").expect("repo");
+        {{structName}}::from_inner(Arc::new(GenericCrudService::new(Arc::new(repo))))
+    }
+
+    #[tokio::test]
+    async fn find_all_returns_empty_on_an_empty_table() {
+        let svc = service().await;
+        assert!(CrudService::find_all(&svc).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn add_inserts_a_row_and_auto_populates_{{stampColsIdent}}() {
+        let svc = service().await;
+        let row = CrudService::add(&svc, RowMap::new()).await.unwrap();
+        assert!(row.get("id").is_some());
+{{#withUuid}}        assert!(row.get("uuid").and_then(|v| v.as_str()).is_some());
+{{/withUuid}}        assert!(row.get("created").and_then(|v| v.as_str()).is_some());
+        assert!(row.get("updated").and_then(|v| v.as_str()).is_some());
+    }
+
+    #[tokio::test]
+    async fn find_returns_none_for_a_missing_id() {
+        let svc = service().await;
+        assert!(CrudService::find(&svc, &json!({{&missingId}}))
+            .await
+            .unwrap()
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn update_returns_none_for_a_missing_id() {
+        let svc = service().await;
+        let result = CrudService::update(&svc, &json!({{&missingId}}), RowMap::new(), None)
+            .await
+            .unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn delete_returns_false_when_the_row_does_not_exist() {
+        let svc = service().await;
+        assert!(!CrudService::delete(&svc, &json!({{&missingId}}), None)
+            .await
+            .unwrap());
+    }
+}

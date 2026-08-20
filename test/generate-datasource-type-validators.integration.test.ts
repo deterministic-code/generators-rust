@@ -3,9 +3,9 @@ import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
 import {
   DATASOURCE_TYPES_YAML,
-} from "./specification-parser.ts";
+} from "../src/specification-parser.ts";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { generate } from "./generate-datasource-type-validators-tests.ts";
+import { generate } from "../src/generate-datasource-type-validators.ts";
 
 const FIXTURE_YAML = `types:
   - user:
@@ -14,13 +14,15 @@ const FIXTURE_YAML = `types:
         - email:
             type: string
             size: 256
+            min_size: 3
         - role_id:
             references: role.id
         - nick_name:
             type: string
             is_nullable: true
-        - token:
-            type: uuid
+        - score:
+            type: float
+            min_size: 0
   - role:
       fields:
         - name:
@@ -59,7 +61,7 @@ const requireEntry = (
   return entry;
 };
 
-describe("generate datasource type validators tests", () => {
+describe("generate datasource type validators", () => {
   const generateWith = (settings: Record<string, string> = {}) =>
     generate({
       reader: fixtureReader(),
@@ -69,9 +71,9 @@ describe("generate datasource type validators tests", () => {
   const userBody = async (settings: Record<string, string> = {}) => {
     const map = indexEntries(await generateWith(settings));
     const userFile = [...map.keys()].find((name) =>
-      name.endsWith("user_tests.rs"),
+      name.endsWith("user_validator.rs"),
     );
-    assert.ok(userFile, "missing user_tests.rs generate entry");
+    assert.ok(userFile, "missing user_validator.rs generate entry");
     return entryBody(requireEntry(map, userFile));
   };
 
@@ -86,22 +88,31 @@ describe("generate datasource type validators tests", () => {
     );
   });
 
-  it("emits one validator test file per datasource type", async () => {
+  it("emits one validator file per datasource type", async () => {
     const byName = indexEntries(await generateWith({}));
     assert.deepEqual(
       [...byName.keys()].sort(),
-      ["role_tests.rs", "user_tests.rs"],
+      ["datasource_role_validator.rs", "datasource_user_validator.rs"],
     );
   });
 
-  it("covers parse, nullable, and invalid uuid cases", async () => {
+  it("emits validate_datasource_* with nonnegative and length checks", async () => {
     const user = await userBody();
-    assert.match(user, /fn parses_a_valid_payload/);
-    assert.match(user, /fn accepts_none_for_nullable_fields/);
-    assert.match(user, /fn rejects_when_invalid_uuid_on_token/);
-    assert.match(user, /validate_datasource_user\(&value\)\.is_ok\(\)/);
-    assert.match(user, /nick_name: None/);
-    assert.match(user, /not-a-uuid/);
+    assert.match(
+      user,
+      /pub fn validate_datasource_user\(obj: &crate::types::generated::datasource::User\)/,
+    );
+    assert.match(user, /must be nonnegative/);
+    assert.match(user, /must be at least 3 chars/);
+    assert.match(user, /exceeds 256 chars/);
+    assert.match(user, /must be at least 0/);
+    assert.doesNotMatch(user, /nick_name/);
+  });
+
+  it("drops uuid checks when datasource.id_type=uuid", async () => {
+    const user = await userBody({ "datasource.id_type": "uuid" });
+    assert.match(user, /obj\.id\.to_string\(\)/);
+    assert.doesNotMatch(user, /obj\.uuid/);
   });
 
   it("writes codegen.schema_version into the file header", async () => {

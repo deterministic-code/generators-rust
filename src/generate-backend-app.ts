@@ -40,6 +40,6 @@ export const generate = async (
     patch(".env", envFile),
     patch(".env.example", envFile),
     patch(".gitignore", gitignore),
-    patch(".dockerignore", "target", "DOCKERIGNORE_RUST"),
+    patch(".dockerignore", "target"),
   ];
 };

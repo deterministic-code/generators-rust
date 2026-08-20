@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { generate } from "./generate-backend-app.ts";
+import { generate } from "../src/generate-backend-app.ts";
 
 const entryBody = (entry: GenerateEntry): string => {
   if ("contents" in entry) return String(entry.contents);
@@ -68,7 +68,7 @@ describe("generate", () => {
     assert.equal(dockerignore.kind, "patch");
     assert.equal(
       "section" in dockerignore ? dockerignore.section : undefined,
-      "DOCKERIGNORE_RUST",
+      undefined,
     );
     assert.equal(entryBody(dockerignore), "target");
   });

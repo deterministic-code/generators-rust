@@ -6,5 +6,5 @@
     "resolveJsonModule": true, "skipLibCheck": true, "strict": true, "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/templates/**", "src/**/__tests__/**", "src/**/*.test.ts", "src/**/*.test.mjs"]
+  "exclude": ["node_modules", "dist", "src/templates/**"]
 }
