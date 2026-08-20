@@ -3,9 +3,10 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { datasourcePaths, routePaths } from "./common/paths.ts";
 import {
-  SpecificationParser,
+  DeterministicParser,
   DATASOURCE_TYPES_YAML,
   type DatasourceType,
+  type IDeterministic,
 } from "./specification-parser.ts";
 import {
   crudTestsTmpl,
@@ -13,8 +14,6 @@ import {
   readonlyTestsTmpl,
   setupTmpl,
 } from "./resources/routes-e2e.ts";
-
-const STANDARD = new Set(["id", "uuid", "created", "updated"]);
 
 const jsonSample = (type: string): string => {
   switch (type) {
@@ -40,7 +39,6 @@ const samplePayload = (table: DatasourceType): string => {
   const parts = table.fields
     .filter(
       (f) =>
-        !STANDARD.has(f.name) &&
         !f.isNullable &&
         f.hasDefault !== true &&
         f.references === undefined,
@@ -49,19 +47,16 @@ const samplePayload = (table: DatasourceType): string => {
   return `{${parts.join(",")}}`;
 };
 
-export const generate = async (
-  ctx: GenerateContext,
-): Promise<GenerateEntry[]> => {
-  if (!(await ctx.reader.exists(DATASOURCE_TYPES_YAML))) return [];
-  const idType = ctx.settings["datasource.id_type"] ?? "integer";
-  const naming = routePaths(ctx.settings);
-  const names = datasourcePaths(ctx.settings);
-  const tables = new SpecificationParser()
-    .parseDatasourceTypes({
-      yaml: await ctx.reader.read(DATASOURCE_TYPES_YAML),
-      idType,
-    })
-    .filter((t) => t.datasourceType !== "many-to-many");
+const generateFrom = (
+  deterministic: IDeterministic,
+  settings: Record<string, string>,
+): GenerateEntry[] => {
+  const idType = settings["datasource.id_type"] ?? "integer";
+  const naming = routePaths(settings);
+  const names = datasourcePaths(settings);
+  const tables = deterministic.expandedDatasourceTypes.filter(
+    (t) => t.datasourceType !== "many-to-many",
+  );
   const missing =
     idType === "uuid" ? "00000000-0000-0000-0000-000000000000" : "99999";
   const setups = tables
@@ -94,4 +89,15 @@ export const generate = async (
       fill(fileTmpl, { setups, tests }),
     ),
   ];
+};
+
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  if (!(await ctx.reader.exists(DATASOURCE_TYPES_YAML))) return [];
+  await ctx.reader.read(DATASOURCE_TYPES_YAML);
+  return generateFrom(
+    await DeterministicParser(ctx.reader).parse(ctx.settings),
+    ctx.settings,
+  );
 };

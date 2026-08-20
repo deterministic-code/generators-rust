@@ -3,11 +3,14 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { viewPaths, type ArtifactPaths } from "./common/paths.ts";
+import { emitViewFields, inlinesParent, isAlias } from "./common/view-shape.ts";
 import {
-  SpecificationParser,
+  DeterministicParser,
+  VIEW_TYPES_YAML,
   type ShapedView,
   type ViewField,
   type ViewType,
+  type IDeterministic,
 } from "./specification-parser.ts";
 import {
   checkArrayNullableTmpl,
@@ -72,16 +75,6 @@ const validatorFn = (
   return `${ns}::${fn}`;
 };
 
-const inlinesParent = (view: ShapedView): boolean =>
-  view.inherits !== null &&
-  (view.enrichments.length > 0 || view.omit.length > 0);
-
-const isAlias = (view: ShapedView): boolean =>
-  view.inherits !== null &&
-  view.fields.length === 0 &&
-  view.enrichments.length === 0 &&
-  view.omit.length === 0;
-
 const checkField = (field: ViewField, opts: EmitOptions): string => {
   const prop = opts.naming.fieldName(field.name);
   const access = `obj.${prop}`;
@@ -102,7 +95,11 @@ const validatorPath = (entity: string, naming: ArtifactPaths): string =>
     ? naming.filePath(entity).replace(/\.rs$/, "_validator.rs")
     : `${naming.fileBase(entity)}_validator.rs`;
 
-const shapedBody = (view: ShapedView, opts: EmitOptions) => {
+const shapedBody = (
+  view: ShapedView,
+  expanded: ViewType | undefined,
+  opts: EmitOptions,
+) => {
   const checks: string[] = [];
   if (view.inherits !== null && !inlinesParent(view)) {
     const fn = validatorFn(view.inherits, "datasource", opts.naming);
@@ -111,17 +108,20 @@ const shapedBody = (view: ShapedView, opts: EmitOptions) => {
       fill(checkRequiredTmpl, { fn, arg }).trimEnd(),
     );
   }
-  for (const line of view.fields.map((f) => checkField(f, opts))) {
+  for (const line of emitViewFields(view, expanded).map((f) =>
+    checkField(f, opts),
+  )) {
     if (line !== "") checks.push(line);
   }
   return checks;
 };
 
-const renderView = (view: ViewType, opts: EmitOptions): GenerateEntry => {
-  const fnName =
-    view.kind === "union"
-      ? `validate_${snakeCase(view.name)}`
-      : `validate_${snakeCase(view.name)}`;
+const renderView = (
+  view: ViewType,
+  expanded: ViewType | undefined,
+  opts: EmitOptions,
+): GenerateEntry => {
+  const fnName = `validate_${snakeCase(view.name)}`;
   const path = validatorPath(view.name, opts.naming);
   if (view.kind === "union") {
     const cls = typePath(view.name, "view", opts.naming);
@@ -142,7 +142,7 @@ const renderView = (view: ViewType, opts: EmitOptions): GenerateEntry => {
       }),
     );
   }
-  const checks = shapedBody(view, opts);
+  const checks = shapedBody(view, expanded, opts);
   return content(
     path,
     fill(typeTmpl, {
@@ -159,10 +159,25 @@ const renderView = (view: ViewType, opts: EmitOptions): GenerateEntry => {
   );
 };
 
+const generateFrom = (
+  deterministic: IDeterministic,
+  settings: Record<string, string>,
+): GenerateEntry[] => {
+  const opts = emitOptions(settings);
+  const expandedByName = new Map(
+    deterministic.expandedViewTypes.map((v) => [v.name, v]),
+  );
+  return deterministic.viewTypes.map((view) =>
+    renderView(view, expandedByName.get(view.name), opts),
+  );
+};
+
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
-  const opts = emitOptions(ctx.settings);
-  const views = await new SpecificationParser(ctx.reader).loadViewTypes();
-  return views.map((view) => renderView(view, opts));
+  await ctx.reader.read(VIEW_TYPES_YAML);
+  return generateFrom(
+    await DeterministicParser(ctx.reader).parse(ctx.settings),
+    ctx.settings,
+  );
 };

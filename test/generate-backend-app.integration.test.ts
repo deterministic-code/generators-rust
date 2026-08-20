@@ -103,7 +103,7 @@ describe("generate", () => {
 
   it("renders a root compose service without a lane dockerfile path", () => {
     const compose = entryBody(requireEntry(byName, "docker-compose.yml"));
-    assert.match(compose, /^app:/m);
+    assert.match(compose, /^rust:/m);
     assert.match(compose, /HOST_PORT/);
     assert.match(compose, /deterministic\.language=rust/);
     assert.doesNotMatch(compose, /dockerfile:/);

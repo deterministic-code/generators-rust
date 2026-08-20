@@ -83,10 +83,11 @@ describe("generate", () => {
     const user = entryBody(requireEntry(byName, "user.rs"));
     assert.match(user, /schema-version: 1\.0/);
     assert.match(user, /pub struct User \{/);
-    assert.match(user, /pub id: i64,/);
+    assert.match(user, /pub id: i32,/);
     assert.match(user, /pub uuid: String,/);
     assert.match(user, /pub created: chrono::DateTime<chrono::Utc>,/);
+    assert.match(user, /pub updated: chrono::DateTime<chrono::Utc>,/);
     assert.match(user, /pub email: String,/);
-    assert.match(user, /pub role_id: i64,/);
+    assert.match(user, /pub role_id: i32,/);
   });
 });

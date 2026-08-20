@@ -9,7 +9,8 @@ import {
 import { convertSpecType } from "./base-type-converter.ts";
 import {
   inheritedIdType,
-  SpecificationParser,
+  DeterministicParser,
+  ROUTES_YAML,
   entityUsesOptimisticConcurrency,
   type DatasourceField,
   type DatasourceType,
@@ -18,6 +19,7 @@ import {
   type RouteCandidate,
   type ViewEnrichment,
   type ViewType,
+  type IDeterministic,
 } from "./specification-parser.ts";
 import {
   appWiringBodyTmpl,
@@ -493,19 +495,14 @@ const renderAppWiring = (
   );
 };
 
-export const generate = async (
-  ctx: GenerateContext,
+const generateFrom = async (
+  deterministic: IDeterministic,
+  settings: Record<string, string>,
 ): Promise<GenerateEntry[]> => {
-  const parser = new SpecificationParser(ctx.reader);
-  const parsed = await parser.loadRoutes({
-    idType: ctx.settings["datasource.id_type"] ?? "integer",
-  });
-  const views = (await ctx.reader.exists("view_types.yaml"))
-    ? await parser.loadViewTypes()
-    : [];
+  const parsed = deterministic.routes;
   const opts = await emitOptions(
-    ctx.settings,
-    views,
+    settings,
+    deterministic.viewTypes,
     parsed.nested,
     parsed.datasources,
   );
@@ -516,4 +513,14 @@ export const generate = async (
     entries.push(renderAppWiring(parsed.candidates, opts));
   }
   return entries;
+};
+
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  await ctx.reader.read(ROUTES_YAML);
+  return generateFrom(
+    await DeterministicParser(ctx.reader).parse(ctx.settings),
+    ctx.settings,
+  );
 };

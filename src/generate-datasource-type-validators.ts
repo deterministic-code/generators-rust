@@ -5,26 +5,20 @@ import { content, type GenerateEntry } from "@deterministic-code/generators-comm
 import { datasourcePaths, type ArtifactPaths } from "./common/paths.ts";
 import {
   inheritedIdType,
-  SpecificationParser,
+  DeterministicParser,
+  DATASOURCE_TYPES_YAML,
   type DatasourceField,
   type DatasourceType,
+  type IDeterministic,
 } from "./specification-parser.ts";
 import { convertSpecType } from "./base-type-converter.ts";
 import { isFiniteInt, isFiniteNumber } from "@deterministic-code/generators-common/yaml-entry";
 import { typeTmpl } from "./resources/datasource-type-validators.ts";
-import { systemColumnsInjectedFor } from "./system-columns.ts";
 
 type EmitOptions = {
   idType: string;
   naming: ArtifactPaths;
   schemaVersion: string;
-};
-
-const SYSTEM: Record<string, DatasourceField> = {
-  id: { name: "id", type: "number", isNullable: false },
-  uuid: { name: "uuid", type: "uuid", isNullable: false },
-  created: { name: "created", type: "datetime", isNullable: false },
-  updated: { name: "updated", type: "datetime", isNullable: false },
 };
 
 const emitOptions = (settings: Record<string, string>): EmitOptions => ({
@@ -150,18 +144,6 @@ const checksForField = (
   ];
 };
 
-const standardLines = (table: DatasourceType, opts: EmitOptions): string[] => {
-  const injected = systemColumnsInjectedFor({
-    datasource_type: table.datasourceType,
-    fields: table.fields.map((f) => ({
-      [f.name]: f.isPrimaryKey ? { primary_key: true } : {},
-    })),
-  });
-  return (["id", "uuid", "created", "updated"] as const)
-    .filter((n) => injected.has(n) && (n !== "uuid" || opts.idType !== "uuid"))
-    .flatMap((n) => checksForField(SYSTEM[n], opts, n === "id"));
-};
-
 const validatorPath = (entity: string, naming: ArtifactPaths): string =>
   naming.byFeature
     ? naming.filePath(entity).replace(/\.rs$/, "_validator.rs")
@@ -182,10 +164,9 @@ const renderValidator = (
   table: DatasourceType,
   opts: EmitOptions,
 ): GenerateEntry => {
-  const lines = [
-    ...standardLines(table, opts),
-    ...table.fields.flatMap((field) => checksForField(field, opts)),
-  ];
+  const lines = table.fields.flatMap((field) =>
+    checksForField(field, opts, field.name === "id"),
+  );
   const has = lines.length > 0;
   return content(
     validatorPath(table.name, opts.naming),
@@ -200,10 +181,22 @@ const renderValidator = (
   );
 };
 
+const generateFrom = (
+  deterministic: IDeterministic,
+  settings: Record<string, string>,
+): GenerateEntry[] => {
+  const opts = emitOptions(settings);
+  return deterministic.expandedDatasourceTypes.map((table) =>
+    renderValidator(table, opts),
+  );
+};
+
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
-  const opts = emitOptions(ctx.settings);
-  const types = await new SpecificationParser(ctx.reader).loadDatasourceTypes(opts.idType);
-  return types.map((table) => renderValidator(table, opts));
+  await ctx.reader.read(DATASOURCE_TYPES_YAML);
+  return generateFrom(
+    await DeterministicParser(ctx.reader).parse(ctx.settings),
+    ctx.settings,
+  );
 };

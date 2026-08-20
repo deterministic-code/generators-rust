@@ -94,7 +94,7 @@ describe("generate-routes-tests", () => {
     assert.match(users, /uri\("\/api\/users\/email\/missing"\)/);
     assert.match(users, /fn get_user_by_role_id_returns_items/);
     assert.match(users, /uri\("\/api\/users\/role-id\/x"\)/);
-    assert.doesNotMatch(users, /if-match/);
+    assert.match(users, /header\("if-match", "2020-01-01T00:00:00.000Z"\)/);
     assert.doesNotMatch(users, /get_user_by_slug/);
 
     const roles = textOf(entries, "roles_tests.rs");
