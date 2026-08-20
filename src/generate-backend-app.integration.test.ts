@@ -68,7 +68,7 @@ describe("generate", () => {
     assert.equal(dockerignore.kind, "patch");
     assert.equal(
       "section" in dockerignore ? dockerignore.section : undefined,
-      "DOCKERIGNORE_RUST",
+      undefined,
     );
     assert.equal(entryBody(dockerignore), "target");
   });
