@@ -80,6 +80,7 @@ describe("generate-services", () => {
     const user = textOf(entries, "user_service.rs");
     assert.match(user, /pub struct UserService/);
     assert.match(user, /inner: Arc<dyn DynamicService>/);
+    assert.match(user, /pub fn from_inner\(inner: Arc<dyn DynamicService>\)/);
     assert.match(user, /ctx\.entity_service\("user"\)/);
     assert.match(user, /impl DynamicService for UserService/);
     assert.match(user, /impl deterministic::routes::CrudService for UserService/);
