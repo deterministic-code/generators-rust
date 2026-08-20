@@ -4,20 +4,97 @@
   "description": "Rust generator pack for the deterministic toolchain: the emit-*-rust lane modules and the deterministic runtime crate.",
   "type": "module",
   "exports": {
+    "./package.json": "./package.json",
     "./generate-context": {
       "types": "./dist/generate-context.d.ts",
       "import": "./dist/generate-context.js"
+    },
+    "./generate-backend-app": {
+      "types": "./dist/generate-backend-app.d.ts",
+      "import": "./dist/generate-backend-app.js"
+    },
+    "./generate-datasource-type-validators": {
+      "types": "./dist/generate-datasource-type-validators.d.ts",
+      "import": "./dist/generate-datasource-type-validators.js"
+    },
+    "./generate-datasource-type-validators-tests": {
+      "types": "./dist/generate-datasource-type-validators-tests.d.ts",
+      "import": "./dist/generate-datasource-type-validators-tests.js"
+    },
+    "./generate-datasource-types": {
+      "types": "./dist/generate-datasource-types.d.ts",
+      "import": "./dist/generate-datasource-types.js"
+    },
+    "./generate-datasource-types-tests": {
+      "types": "./dist/generate-datasource-types-tests.d.ts",
+      "import": "./dist/generate-datasource-types-tests.js"
+    },
+    "./generate-openapi": {
+      "types": "./dist/generate-openapi.d.ts",
+      "import": "./dist/generate-openapi.js"
+    },
+    "./generate-perf-e2e-tests": {
+      "types": "./dist/generate-perf-e2e-tests.d.ts",
+      "import": "./dist/generate-perf-e2e-tests.js"
+    },
+    "./generate-perf-server": {
+      "types": "./dist/generate-perf-server.d.ts",
+      "import": "./dist/generate-perf-server.js"
+    },
+    "./generate-routes": {
+      "types": "./dist/generate-routes.d.ts",
+      "import": "./dist/generate-routes.js"
+    },
+    "./generate-routes-e2e-test": {
+      "types": "./dist/generate-routes-e2e-test.d.ts",
+      "import": "./dist/generate-routes-e2e-test.js"
+    },
+    "./generate-routes-tests": {
+      "types": "./dist/generate-routes-tests.d.ts",
+      "import": "./dist/generate-routes-tests.js"
+    },
+    "./generate-service-integration-tests": {
+      "types": "./dist/generate-service-integration-tests.d.ts",
+      "import": "./dist/generate-service-integration-tests.js"
+    },
+    "./generate-service-tests": {
+      "types": "./dist/generate-service-tests.d.ts",
+      "import": "./dist/generate-service-tests.js"
+    },
+    "./generate-services": {
+      "types": "./dist/generate-services.d.ts",
+      "import": "./dist/generate-services.js"
+    },
+    "./generate-view-type-validators": {
+      "types": "./dist/generate-view-type-validators.d.ts",
+      "import": "./dist/generate-view-type-validators.js"
+    },
+    "./generate-view-type-validators-tests": {
+      "types": "./dist/generate-view-type-validators-tests.d.ts",
+      "import": "./dist/generate-view-type-validators-tests.js"
+    },
+    "./generate-view-types": {
+      "types": "./dist/generate-view-types.d.ts",
+      "import": "./dist/generate-view-types.js"
+    },
+    "./generate-view-types-tests": {
+      "types": "./dist/generate-view-types-tests.d.ts",
+      "import": "./dist/generate-view-types-tests.js"
     },
     "./*": {
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js"
     },
-    "./package.json": "./package.json"
+    "./*/*": {
+      "types": "./dist/*/*.d.ts",
+      "import": "./dist/*/*.js"
+    }
   },
   "files": [
     "dist",
     "src",
-    "rust"
+    "rust",
+    "tsconfig.build.json"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R src/templates dist/",

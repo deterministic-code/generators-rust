@@ -14,24 +14,8 @@ import { isFiniteInt, isFiniteNumber } from "@deterministic-code/generators-comm
 import { typeTmpl } from "./resources/datasource-type-validators.ts";
 import { systemColumnsInjectedFor } from "./system-columns.ts";
 
-type Datasource = {
-  idType: string;
-  withUuidColumn: boolean;
-  useOptimisticConcurrency: boolean;
-};
-
-const datasource = (settings: Record<string, string>): Datasource => {
-  const idType = settings["datasource.id_type"] ?? "integer";
-  return {
-    idType,
-    withUuidColumn: idType !== "uuid",
-    useOptimisticConcurrency:
-      settings["datasource.use_optimistic_concurrency"] === "true",
-  };
-};
-
 type EmitOptions = {
-  ds: Datasource;
+  idType: string;
   naming: ArtifactPaths;
   schemaVersion: string;
 };
@@ -44,7 +28,7 @@ const SYSTEM: Record<string, DatasourceField> = {
 };
 
 const emitOptions = (settings: Record<string, string>): EmitOptions => ({
-  ds: datasource(settings),
+  idType: settings["datasource.id_type"] ?? "integer",
   naming: datasourcePaths(settings),
   schemaVersion: settings["codegen.schema_version"] ?? "1.0",
 });
@@ -138,7 +122,7 @@ const checksForField = (
   isStandardId = false,
 ): string[] => {
   const prop = opts.naming.fieldName(field.name);
-  const { idType } = opts.ds;
+  const { idType } = opts;
   if (isStandardId) {
     if (idType === "string") return [];
     if (idType === "uuid") {
@@ -174,7 +158,7 @@ const standardLines = (table: DatasourceType, opts: EmitOptions): string[] => {
     })),
   });
   return (["id", "uuid", "created", "updated"] as const)
-    .filter((n) => injected.has(n) && (n !== "uuid" || opts.ds.withUuidColumn))
+    .filter((n) => injected.has(n) && (n !== "uuid" || opts.idType !== "uuid"))
     .flatMap((n) => checksForField(SYSTEM[n], opts, n === "id"));
 };
 
@@ -220,6 +204,6 @@ export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   const opts = emitOptions(ctx.settings);
-  const types = await new SpecificationParser(ctx.reader).loadDatasourceTypes(opts.ds.idType);
+  const types = await new SpecificationParser(ctx.reader).loadDatasourceTypes(opts.idType);
   return types.map((table) => renderValidator(table, opts));
 };

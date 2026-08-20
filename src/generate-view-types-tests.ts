@@ -14,24 +14,8 @@ import {
 import { convertSpecType } from "./base-type-converter.ts";
 import { typeTestTmpl } from "./resources/view-types-tests.ts";
 
-type Datasource = {
-  idType: string;
-  withUuidColumn: boolean;
-  useOptimisticConcurrency: boolean;
-};
-
-const datasource = (settings: Record<string, string>): Datasource => {
-  const idType = settings["datasource.id_type"] ?? "integer";
-  return {
-    idType,
-    withUuidColumn: idType !== "uuid",
-    useOptimisticConcurrency:
-      settings["datasource.use_optimistic_concurrency"] === "true",
-  };
-};
-
 type EmitOptions = {
-  ds: Datasource;
+  idType: string;
   naming: ArtifactPaths;
   schemaVersion: string;
   tables: Map<string, DatasourceType>;
@@ -46,7 +30,7 @@ type FieldTok = {
 };
 
 const emitBase = (settings: Record<string, string>) => ({
-  ds: datasource(settings),
+  idType: settings["datasource.id_type"] ?? "integer",
   naming: viewPaths(settings),
   schemaVersion: settings["codegen.schema_version"] ?? "1.0",
 });
@@ -141,7 +125,7 @@ const renderDs = (name: string, opts: EmitOptions): string => {
   const table = opts.tables.get(name);
   const cls = qual(name, "datasource", opts.naming);
   if (table === undefined) return `${cls} {}`;
-  const body = tableFields(table.fields, opts.ds.idType)
+  const body = tableFields(table.fields, opts.idType)
     .map((f) => {
       const { sample } = samplesForNative(convertSpecType(f.type), f.type);
       const val = f.isNullable ? `Some(${sample})` : sample;
@@ -159,7 +143,7 @@ const parentToks = (view: ShapedView, opts: EmitOptions): FieldTok[] => {
     ...view.omit,
     ...view.enrichments.map((e) => e.fkColumn),
   ]);
-  return tableFields(table.fields, opts.ds.idType)
+  return tableFields(table.fields, opts.idType)
     .filter((f) => !omit.has(f.name))
     .map((f) => {
       const pair = samplesForNative(convertSpecType(f.type), f.type);
@@ -284,7 +268,7 @@ export const generate = async (
   const tables = (await ctx.reader.exists(DATASOURCE_TYPES_YAML))
     ? new SpecificationParser().parseDatasourceTypes({
         yaml: await ctx.reader.read(DATASOURCE_TYPES_YAML),
-        idType: base.ds.idType,
+        idType: base.idType,
       })
     : [];
   const opts: EmitOptions = {
