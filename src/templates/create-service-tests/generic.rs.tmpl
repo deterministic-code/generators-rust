@@ -1,0 +1,86 @@
+#[cfg(test)]
+mod tests {
+    use super::{{fileBase}}::*;
+    use deterministic::repositories::inmemory::InMemoryCrudRepository;
+    use deterministic::repositories::RowMap;
+    use deterministic::routes::{ByFieldService, CrudService, ReadOnlyService};
+    use deterministic::services::{DynamicService, GenericCrudService};
+    use serde_json::json;
+    use std::sync::Arc;
+
+    fn service() -> {{structName}} {
+        {{structName}}::from_inner(Arc::new(GenericCrudService::new(Arc::new(
+            InMemoryCrudRepository::new(),
+        ))))
+    }
+
+    fn row(name: &str) -> RowMap {
+        RowMap::from_iter([("name".to_string(), json!(name))])
+    }
+
+    #[tokio::test]
+    async fn find_all_returns_empty_on_a_fresh_service() {
+        let svc = service();
+        let rows = CrudService::find_all(&svc).await.unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn add_then_find_round_trips() {
+        let svc = service();
+        let created = CrudService::add(&svc, row("example")).await.unwrap();
+        let id = created.get("id").cloned().expect("id");
+        let found = CrudService::find(&svc, &id).await.unwrap().unwrap();
+        assert_eq!(found.get("name"), Some(&json!("example")));
+        assert_eq!(CrudService::find_all(&svc).await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn find_returns_none_for_a_missing_id() {
+        let svc = service();
+        assert!(CrudService::find(&svc, &json!({{&missingId}})).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn update_returns_none_for_a_missing_id() {
+        let svc = service();
+        let result = CrudService::update(&svc, &json!({{&missingId}}), row("renamed"), None)
+            .await
+            .unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn delete_returns_false_for_a_missing_id() {
+        let svc = service();
+        assert!(!CrudService::delete(&svc, &json!({{&missingId}}), None)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn find_by_returns_matching_rows() {
+        let svc = service();
+        CrudService::add(&svc, row("example")).await.unwrap();
+        let rows = ByFieldService::find_by(&svc, "name", &json!("example"))
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn read_only_find_all_matches_crud() {
+        let svc = service();
+        CrudService::add(&svc, row("example")).await.unwrap();
+        assert_eq!(ReadOnlyService::find_all(&svc).await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn invoke_find_all_delegates_to_the_inner_service() {
+        let svc = service();
+        let value = DynamicService::invoke(&svc, "findAll", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(value, json!([]));
+    }
+}

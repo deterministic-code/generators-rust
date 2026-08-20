@@ -1,0 +1,47 @@
+#[cfg(test)]
+mod tests {
+    use super::{{fileBase}}::router;
+    {{{serviceImport}}}
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use deterministic::repositories::inmemory::InMemoryCrudRepository;
+    use deterministic::services::GenericCrudService;
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    fn setup() -> axum::Router {
+        let inner = GenericCrudService::new(Arc::new(InMemoryCrudRepository::new()));
+        router(Arc::new({{className}}::from_inner(Arc::new(inner))))
+    }
+
+    #[tokio::test]
+    async fn get_{{entitySnake}}_list_returns_200() {
+        let res = setup()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("{{mountPath}}")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn get_{{entitySnake}}_missing_returns_404() {
+        let res = setup()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("{{mountPath}}/{{missingId}}")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    }
+{{{byFieldsBlock}}}
+}

@@ -1,0 +1,15 @@
+
+    #[tokio::test]
+    async fn get_{{entitySnake}}_by_{{byField}}_missing_returns_404() {
+        let res = setup()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("{{mountPath}}/{{kebab}}/missing")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    }
