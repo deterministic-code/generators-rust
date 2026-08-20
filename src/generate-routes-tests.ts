@@ -3,12 +3,14 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { routePaths, type RoutePaths } from "./common/paths.ts";
 import {
-  SpecificationParser,
+  DeterministicParser,
+  ROUTES_YAML,
   primaryKeyFor,
   entityUsesOptimisticConcurrency,
   type DatasourceType,
   type RouteByField,
   type RouteCandidate,
+  type IDeterministic,
 } from "./specification-parser.ts";
 import {
   byFieldGetListTmpl,
@@ -85,18 +87,27 @@ const renderTest = (
   return content(path, fill(crudTmpl, shared));
 };
 
-export const generate = async (
-  ctx: GenerateContext,
-): Promise<GenerateEntry[]> => {
-  const idType = ctx.settings["datasource.id_type"] ?? "integer";
-  const parsed = await new SpecificationParser(ctx.reader).loadRoutes({
-    idType,
-  });
+const generateFrom = (
+  deterministic: IDeterministic,
+  settings: Record<string, string>,
+): GenerateEntry[] => {
+  const idType = settings["datasource.id_type"] ?? "integer";
+  const parsed = deterministic.routes;
   const opts: EmitOptions = {
-    naming: routePaths(ctx.settings),
+    naming: routePaths(settings),
     idType,
-    useOcc: ctx.settings["datasource.use_optimistic_concurrency"] === "true",
+    useOcc: settings["datasource.use_optimistic_concurrency"] !== "false",
     datasources: parsed.datasources,
   };
   return parsed.candidates.map((c) => renderTest(c, opts));
+};
+
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  await ctx.reader.read(ROUTES_YAML);
+  return generateFrom(
+    await DeterministicParser(ctx.reader).parse(ctx.settings),
+    ctx.settings,
+  );
 };

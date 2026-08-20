@@ -61,7 +61,7 @@ const core = (
 const CUSTOM_SUFFIX_TOKENS = new Set(["service", "route"]);
 
 /** HealthCheckService → health-check; bare "Service" → "". */
-export const featureEntityFromClass = (className: string): string => {
+const featureEntityFromClass = (className: string): string => {
   const tokens = className
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")

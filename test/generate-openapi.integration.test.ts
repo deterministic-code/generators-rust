@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { generate } from "./generate-openapi.ts";
+import { generate } from "../src/generate-openapi.ts";
 
 const textOf = (entries: GenerateEntry[], path: string): string => {
   const hit = entries.find((e) => e.kind === "content" && e.filename === path);

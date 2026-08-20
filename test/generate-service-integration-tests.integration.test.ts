@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { generate } from "./generate-service-integration-tests.ts";
+import { generate } from "../src/generate-service-integration-tests.ts";
 
 const DS_YAML = `types:
   - user:

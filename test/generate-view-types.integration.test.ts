@@ -4,9 +4,9 @@ import { memoryReader } from "@deterministic-code/generators-common/deterministi
 import {
   DATASOURCE_TYPES_YAML,
   VIEW_TYPES_YAML,
-} from "./specification-parser.ts";
+} from "../src/specification-parser.ts";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { generate } from "./generate-view-types.ts";
+import { generate } from "../src/generate-view-types.ts";
 
 const DS_YAML = `types:
   - user:

@@ -2,7 +2,7 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { servicePaths, type ServicePaths } from "./common/paths.ts";
-import { SpecificationParser } from "./specification-parser.ts";
+import { DeterministicParser, SERVICES_YAML, type IDeterministic } from "./specification-parser.ts";
 import { genericTmpl } from "./resources/service-tests.ts";
 
 const testPath = (entity: string, naming: ServicePaths): string => {
@@ -17,16 +17,13 @@ const missingIdExpr = (idType: string): string =>
     ? `"00000000-0000-0000-0000-000000000000"`
     : "99999";
 
-export const generate = async (
-  ctx: GenerateContext,
-): Promise<GenerateEntry[]> => {
-  const idType = ctx.settings["datasource.id_type"] ?? "integer";
-  const naming = servicePaths(ctx.settings);
-  const { generics } = await new SpecificationParser(ctx.reader).loadServices({
-    idType,
-    serviceClassName: naming.serviceClassName,
-  });
-  return generics.map((c) =>
+const generateFrom = (
+  deterministic: IDeterministic,
+  settings: Record<string, string>,
+): GenerateEntry[] => {
+  const idType = settings["datasource.id_type"] ?? "integer";
+  const naming = servicePaths(settings);
+  return deterministic.services.generics.map((c) =>
     content(
       testPath(c.name, naming),
       fill(genericTmpl, {
@@ -35,5 +32,18 @@ export const generate = async (
         missingId: missingIdExpr(idType),
       }),
     ),
+  );
+};
+
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  await ctx.reader.read(SERVICES_YAML);
+  const naming = servicePaths(ctx.settings);
+  return generateFrom(
+    await DeterministicParser(ctx.reader).parse(ctx.settings, {
+      serviceClassName: naming.serviceClassName,
+    }),
+    ctx.settings,
   );
 };

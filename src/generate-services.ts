@@ -7,9 +7,11 @@ import {
   type ServicePaths,
 } from "./common/paths.ts";
 import {
-  SpecificationParser,
+  DeterministicParser,
+  SERVICES_YAML,
   type CustomServiceEntry,
   type ServiceCandidate,
+  type IDeterministic,
 } from "./specification-parser.ts";
 import { customStubTmpl, genericTmpl } from "./resources/services.ts";
 
@@ -118,16 +120,27 @@ const renderCustom = (
   );
 };
 
-export const generate = async (
-  ctx: GenerateContext,
-): Promise<GenerateEntry[]> => {
-  const opts = emitOptions(ctx.settings);
-  const { generics, customs } = await new SpecificationParser(ctx.reader).loadServices({
-    idType: ctx.settings["datasource.id_type"] ?? "integer",
-    serviceClassName: opts.naming.serviceClassName,
-  });
+const generateFrom = (
+  deterministic: IDeterministic,
+  settings: Record<string, string>,
+): GenerateEntry[] => {
+  const opts = emitOptions(settings);
+  const { generics, customs } = deterministic.services;
   return [
     ...generics.map((c) => renderGeneric(c, opts)),
     ...customs.map((c) => renderCustom(c, opts)),
   ];
+};
+
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  await ctx.reader.read(SERVICES_YAML);
+  const naming = servicePaths(ctx.settings);
+  return generateFrom(
+    await DeterministicParser(ctx.reader).parse(ctx.settings, {
+      serviceClassName: naming.serviceClassName,
+    }),
+    ctx.settings,
+  );
 };

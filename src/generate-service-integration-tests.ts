@@ -3,9 +3,10 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { servicePaths, type ServicePaths } from "./common/paths.ts";
 import {
-  SpecificationParser,
-  DATASOURCE_TYPES_YAML,
+  DeterministicParser,
+  SERVICES_YAML,
   type DatasourceType,
+  type IDeterministic,
 } from "./specification-parser.ts";
 import { genericTmpl } from "./resources/service-integration-tests.ts";
 
@@ -26,22 +27,14 @@ const missingIdExpr = (idType: string): string =>
     ? `"00000000-0000-0000-0000-000000000000"`
     : "99999";
 
-export const generate = async (
-  ctx: GenerateContext,
-): Promise<GenerateEntry[]> => {
-  const idType = ctx.settings["datasource.id_type"] ?? "integer";
-  const naming = servicePaths(ctx.settings);
-  const { generics } = await new SpecificationParser(ctx.reader).loadServices({
-    idType,
-    serviceClassName: naming.serviceClassName,
-  });
-  const hasDs = await ctx.reader.exists(DATASOURCE_TYPES_YAML);
-  const datasources = hasDs
-    ? new SpecificationParser().parseDatasourceTypes({
-        yaml: await ctx.reader.read(DATASOURCE_TYPES_YAML),
-        idType,
-      })
-    : [];
+const generateFrom = (
+  deterministic: IDeterministic,
+  settings: Record<string, string>,
+): GenerateEntry[] => {
+  const idType = settings["datasource.id_type"] ?? "integer";
+  const naming = servicePaths(settings);
+  const { generics } = deterministic.services;
+  const datasources = deterministic.expandedDatasourceTypes;
   const withUuid = idType !== "uuid";
   return generics
     .filter(
@@ -62,4 +55,17 @@ export const generate = async (
         }),
       ),
     );
+};
+
+export const generate = async (
+  ctx: GenerateContext,
+): Promise<GenerateEntry[]> => {
+  await ctx.reader.read(SERVICES_YAML);
+  const naming = servicePaths(ctx.settings);
+  return generateFrom(
+    await DeterministicParser(ctx.reader).parse(ctx.settings, {
+      serviceClassName: naming.serviceClassName,
+    }),
+    ctx.settings,
+  );
 };

@@ -58,7 +58,10 @@ impl EagerChildReadingService {
             let children = load_binding_children(binding, &parent_id, &self.pool_datasource)
                 .await
                 .map_err(ServiceError::Repository)?;
-            row.insert(binding.binding.field_name.clone(), Value::Array(children));
+            row.insert(
+                binding.binding.field_name.clone(),
+                binding.binding.pack_children(children),
+            );
         }
         Ok(Value::Object(row))
     }
@@ -125,6 +128,7 @@ mod tests {
                 field_name: "addresses".to_string(),
                 child_table: "address".to_string(),
                 children: Vec::new(),
+                is_array: true,
             },
             child_service_factory: factory("address"),
             junction_repo_factory: None,
@@ -162,6 +166,51 @@ mod tests {
         let addresses = row["addresses"].as_array().expect("addresses");
         assert_eq!(addresses.len(), 1);
         assert_eq!(addresses[0]["line1"], json!("1 Main St"));
+    }
+
+    fn address_binding() -> EagerWriteChildBindingRuntime {
+        let mut b = addresses_binding();
+        b.binding.field_name = "address".to_string();
+        b.binding.is_array = false;
+        b
+    }
+
+    #[tokio::test]
+    async fn find_by_id_attaches_singular_object_or_null() {
+        let ds = open_sqlite().await;
+        let pool: Arc<dyn Datasource> = ds.clone();
+        let contact = factory("contact")(pool.clone())
+            .unwrap()
+            .invoke("create", json!({ "first_name": "Ada" }))
+            .await
+            .unwrap();
+        let id = contact["id"].clone();
+        factory("address")(pool.clone())
+            .unwrap()
+            .invoke(
+                "create",
+                json!({ "contact_id": id.clone(), "line1": "1 Main St" }),
+            )
+            .await
+            .unwrap();
+
+        let base = factory("contact")(pool.clone()).unwrap();
+        let svc = EagerChildReadingService::new(base, pool.clone(), "id", vec![address_binding()]);
+        let row = svc.invoke("findById", json!({ "id": id })).await.unwrap();
+        assert!(row["address"].is_object());
+        assert_eq!(row["address"]["line1"], json!("1 Main St"));
+
+        let empty = factory("contact")(pool.clone())
+            .unwrap()
+            .invoke("create", json!({ "first_name": "Grace" }))
+            .await
+            .unwrap();
+        let empty_id = empty["id"].clone();
+        let row = svc
+            .invoke("findById", json!({ "id": empty_id }))
+            .await
+            .unwrap();
+        assert!(row["address"].is_null());
     }
 
     #[tokio::test]

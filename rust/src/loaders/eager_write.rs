@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use serde_json::Value;
+
 use super::datasource_types::DatasourceTypeDef;
 use super::routes::RoutesDoc;
 use super::view_types::{ViewTypeDef, ViewTypesDoc};
@@ -22,6 +24,8 @@ pub struct EagerWriteChildBinding {
     pub field_name: String,
     pub child_table: String,
     pub children: Vec<EagerWriteChildBinding>,
+    /// False when the view field is a single nested object (`datasource_types.address`).
+    pub is_array: bool,
 }
 
 pub fn build_eager_write_bindings(
@@ -126,6 +130,7 @@ fn attach_children_for(
             field_name: b.field_name.clone(),
             child_table: b.child_table.clone(),
             children: attach_children_for(&b.child_table, children_by_parent),
+            is_array: b.is_array,
         })
         .collect()
 }
@@ -144,7 +149,7 @@ fn build_one_binding(
     let field_type = field.r#type.as_str();
     let references = field.references.as_deref()?;
 
-    let element = parse_array_element_type(field_type)?;
+    let (element, is_array) = parse_relation_element_type(field_type)?;
     let (ref_table, ref_column) = parse_reference(references)?;
 
     if ref_table == element {
@@ -155,6 +160,7 @@ fn build_one_binding(
             field_name: child_field_name.to_string(),
             child_table: element.to_string(),
             children: Vec::new(),
+            is_array,
         });
     }
 
@@ -184,12 +190,23 @@ fn build_one_binding(
         field_name: child_field_name.to_string(),
         child_table: element.to_string(),
         children: Vec::new(),
+        is_array,
     })
 }
 
-fn parse_array_element_type(t: &str) -> Option<&str> {
+fn parse_relation_element_type(t: &str) -> Option<(&str, bool)> {
     let rest = t.strip_prefix("datasource_types.")?;
-    rest.strip_suffix("[]")
+    if rest.is_empty() || rest.contains('.') {
+        return None;
+    }
+    if let Some(elem) = rest.strip_suffix("[]") {
+        if elem.is_empty() || elem.contains('.') {
+            return None;
+        }
+        Some((elem, true))
+    } else {
+        Some((rest, false))
+    }
 }
 
 fn parse_reference(r: &str) -> Option<(&str, &str)> {
@@ -199,6 +216,27 @@ fn parse_reference(r: &str) -> Option<(&str, &str)> {
         return None;
     }
     Some((table, column))
+}
+
+impl EagerWriteChildBinding {
+    pub fn pack_children(&self, rows: Vec<Value>) -> Value {
+        if self.is_array {
+            Value::Array(rows)
+        } else {
+            rows.into_iter().next().unwrap_or(Value::Null)
+        }
+    }
+
+    pub fn unpack_incoming(&self, value: Option<&Value>) -> Option<Vec<Value>> {
+        match (self.is_array, value) {
+            (true, Some(Value::Array(arr))) => Some(arr.clone()),
+            (true, _) => None,
+            (false, None) => None,
+            (false, Some(Value::Null)) => Some(Vec::new()),
+            (false, Some(obj @ Value::Object(_))) => Some(vec![obj.clone()]),
+            (false, _) => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -232,12 +270,65 @@ mod tests {
     }
 
     #[test]
-    fn parse_array_element_type_strips_namespace_and_brackets() {
+    fn parse_relation_element_type_accepts_array_and_singular() {
         assert_eq!(
-            parse_array_element_type("datasource_types.task[]"),
-            Some("task")
+            parse_relation_element_type("datasource_types.task[]"),
+            Some(("task", true))
         );
-        assert_eq!(parse_array_element_type("task[]"), None);
+        assert_eq!(
+            parse_relation_element_type("datasource_types.address"),
+            Some(("address", false))
+        );
+        assert_eq!(parse_relation_element_type("task[]"), None);
+        assert_eq!(
+            parse_relation_element_type("datasource_types.address.contact_id"),
+            None
+        );
+    }
+
+    #[test]
+    fn pack_unpack_singular_object() {
+        let b = EagerWriteChildBinding {
+            kind: BindingKind::DirectFk {
+                fk_column: "contact_id".to_string(),
+            },
+            field_name: "address".to_string(),
+            child_table: "address".to_string(),
+            children: Vec::new(),
+            is_array: false,
+        };
+        let obj = serde_json::json!({ "line1": "x" });
+        assert_eq!(b.unpack_incoming(Some(&obj)), Some(vec![obj.clone()]));
+        assert_eq!(b.unpack_incoming(Some(&Value::Null)), Some(vec![]));
+        assert_eq!(b.pack_children(vec![obj.clone()]), obj);
+        assert_eq!(b.pack_children(vec![]), Value::Null);
+    }
+
+    #[test]
+    fn pack_unpack_collection_array() {
+        let b = EagerWriteChildBinding {
+            kind: BindingKind::DirectFk {
+                fk_column: "contact_id".to_string(),
+            },
+            field_name: "addresses".to_string(),
+            child_table: "address".to_string(),
+            children: Vec::new(),
+            is_array: true,
+        };
+        let obj = serde_json::json!({ "line1": "x" });
+        let arr = Value::Array(vec![obj.clone()]);
+        assert_eq!(b.unpack_incoming(Some(&arr)), Some(vec![obj.clone()]));
+        assert_eq!(b.unpack_incoming(Some(&obj)), None);
+        assert_eq!(b.unpack_incoming(Some(&Value::Null)), None);
+        assert_eq!(b.unpack_incoming(None), None);
+        assert_eq!(b.pack_children(vec![obj.clone()]), arr);
+        assert_eq!(b.pack_children(vec![]), Value::Array(vec![]));
+        let singular = EagerWriteChildBinding {
+            is_array: false,
+            ..b.clone()
+        };
+        assert_eq!(singular.unpack_incoming(Some(&arr)), None);
+        assert_eq!(singular.unpack_incoming(None), None);
     }
 
     #[test]
@@ -389,5 +480,56 @@ mod tests {
             }
             other => panic!("expected M2m, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn singular_nested_object_is_direct_fk() {
+        let routes = parse_routes(concat!(
+            "includes:\n",
+            "  - view_type_routes:\n",
+            "      eager_write_path:\n",
+            "        - contact.address\n",
+            "      eager_path:\n",
+            "        - contact.address\n",
+            "routes: []\n",
+        ))
+        .unwrap();
+        let views = parse_view_types(concat!(
+            "types:\n",
+            "  - contact:\n",
+            "      inherits: datasource_types.contact\n",
+            "      fields:\n",
+            "        - address:\n",
+            "            type: datasource_types.address\n",
+            "            references: datasource_types.address.contact_id\n",
+        ))
+        .unwrap();
+        let ds = parse_datasource_types(concat!(
+            "types:\n",
+            "  - contact:\n",
+            "      fields:\n",
+            "        - name:\n",
+            "            type: string\n",
+            "  - address:\n",
+            "      fields:\n",
+            "        - contact_id:\n",
+            "            type: number\n",
+            "            references: contact.id\n",
+            "        - line1:\n",
+            "            type: string\n",
+        ))
+        .unwrap();
+        let map = build_eager_write_bindings(&routes, &views, &ds.types);
+        let contact = map.get("contact").expect("contact bindings");
+        assert_eq!(contact.len(), 1);
+        assert_eq!(contact[0].field_name, "address");
+        assert_eq!(contact[0].child_table, "address");
+        assert!(!contact[0].is_array);
+        assert!(matches!(
+            &contact[0].kind,
+            BindingKind::DirectFk { fk_column } if fk_column == "contact_id"
+        ));
+        let read = build_eager_read_bindings(&routes, &views, &ds.types);
+        assert!(!read.get("contact").unwrap()[0].is_array);
     }
 }

@@ -281,13 +281,21 @@ fn split_row(
     (base, nested)
 }
 
+fn incoming_child_rows(
+    parent_row: &Map<String, Value>,
+    b: &EagerWriteChildBindingRuntime,
+) -> Option<Vec<Value>> {
+    b.binding
+        .unpack_incoming(parent_row.get(&b.binding.field_name))
+}
+
 fn validate_rows_recursively(
     parent_row: &Map<String, Value>,
     bindings: &[EagerWriteChildBindingRuntime],
     mode: Mode,
 ) -> Result<(), ServiceError> {
     for b in bindings {
-        let Some(Value::Array(arr)) = parent_row.get(&b.binding.field_name) else {
+        let Some(arr) = incoming_child_rows(parent_row, b) else {
             continue;
         };
         for row in arr {
@@ -308,7 +316,7 @@ fn validate_rows_recursively(
                 }
             }
             if !b.children.is_empty() {
-                validate_rows_recursively(obj, &b.children, mode)?;
+                validate_rows_recursively(&obj, &b.children, mode)?;
             }
         }
     }
@@ -326,17 +334,15 @@ fn process_bindings_for_parent<'a>(
     Box::pin(async move {
         let mut out = Map::new();
         for b in bindings {
-            let incoming = parent_incoming_row.get(&b.binding.field_name);
-            let child_rows = match incoming {
-                Some(Value::Array(arr)) => Some(arr.clone()),
-                _ => None,
-            };
+            let child_rows = b
+                .binding
+                .unpack_incoming(parent_incoming_row.get(&b.binding.field_name));
             if mode == Mode::Create {
                 let arr = match child_rows {
                     Some(rows) => create_child_array(b, parent_id, rows, txn_ds).await?,
                     None => Vec::new(),
                 };
-                out.insert(b.binding.field_name.clone(), Value::Array(arr));
+                out.insert(b.binding.field_name.clone(), b.binding.pack_children(arr));
                 continue;
             }
             // update / patch
@@ -344,7 +350,7 @@ fn process_bindings_for_parent<'a>(
                 Some(rows) => reconcile_child_array(b, parent_id, rows, txn_ds, mode).await?,
                 None => load_existing_for(b, parent_id, txn_ds).await?,
             };
-            out.insert(b.binding.field_name.clone(), Value::Array(arr));
+            out.insert(b.binding.field_name.clone(), b.binding.pack_children(arr));
         }
         Ok(out)
     })
@@ -952,6 +958,7 @@ mod tests {
                 field_name: field.to_string(),
                 child_table: table.to_string(),
                 children: Vec::new(),
+                is_array: true,
             },
             child_service_factory: build_sqlite_service_factory(table),
             junction_repo_factory: None,
@@ -1036,6 +1043,56 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result["tasks"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn create_singular_child_object_and_omitted_is_null() {
+        let ds = open_sqlite_with_schema().await;
+        let pool_ds: Arc<dyn Datasource> = ds.clone();
+        let mut binding = direct_fk_binding("meeting", "meeting", "todo_id");
+        binding.binding.is_array = false;
+        let base_svc = build_sqlite_service_factory("todo")(pool_ds.clone()).unwrap();
+        let svc = EagerChildWritingService::new(
+            base_svc,
+            pool_ds.clone(),
+            build_sqlite_service_factory("todo"),
+            "id",
+            vec![binding],
+        );
+        let created = svc
+            .invoke(
+                "create",
+                json!({
+                    "body": {
+                        "title": "demo",
+                        "is_done": false,
+                        "meeting": { "scheduled_at": "2026-01-01T00:00:00Z" }
+                    }
+                }),
+            )
+            .await
+            .unwrap();
+        assert!(created["meeting"].is_object(), "got {:?}", created["meeting"]);
+        assert!(!created["meeting"].is_array());
+
+        let mut omitted_binding = direct_fk_binding("meeting", "meeting", "todo_id");
+        omitted_binding.binding.is_array = false;
+        let omitted_base = build_sqlite_service_factory("todo")(pool_ds.clone()).unwrap();
+        let omitted_svc = EagerChildWritingService::new(
+            omitted_base,
+            pool_ds.clone(),
+            build_sqlite_service_factory("todo"),
+            "id",
+            vec![omitted_binding],
+        );
+        let omitted = omitted_svc
+            .invoke(
+                "create",
+                json!({ "body": { "title": "empty", "is_done": false } }),
+            )
+            .await
+            .unwrap();
+        assert!(omitted["meeting"].is_null());
     }
 
     #[test]
@@ -1172,6 +1229,7 @@ mod tests {
                 field_name: "tags".to_string(),
                 child_table: "tag".to_string(),
                 children: Vec::new(),
+                is_array: true,
             },
             child_service_factory: tag_factory.clone(),
             junction_repo_factory: Some(task_tag_junction_factory.clone()),
@@ -1185,6 +1243,7 @@ mod tests {
                 field_name: "tasks".to_string(),
                 child_table: "task".to_string(),
                 children: Vec::new(),
+                is_array: true,
             },
             child_service_factory: build_sqlite_service_factory("task"),
             junction_repo_factory: None,
@@ -1339,6 +1398,7 @@ mod tests {
                 field_name: "tags".to_string(),
                 child_table: "tag".to_string(),
                 children: Vec::new(),
+                is_array: true,
             },
             child_service_factory: target_factory.clone(),
             junction_repo_factory: Some(junction_factory.clone()),

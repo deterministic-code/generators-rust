@@ -1,0 +1,56 @@
+use {{crateModule}}::routes::openapi;
+use reqwest::StatusCode;
+use serde_json::Value;
+use tokio::net::TcpListener;
+
+async fn serve_openapi() -> String {
+    let router = openapi::router();
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, router).await;
+    });
+    format!("http://{}", addr)
+}
+
+#[tokio::test]
+async fn openapi_endpoint_returns_valid_spec_document() {
+    let base = serve_openapi().await;
+    let resp = reqwest::get(format!("{}/openapi.json", base))
+        .await
+        .expect("GET /openapi.json");
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        resp.headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.to_string()),
+        Some("application/json".to_string())
+    );
+    let body: Value = resp.json().await.expect("json");
+    assert_eq!(body.get("openapi").and_then(|v| v.as_str()), Some("3.0.3"));
+    assert!(body.get("info").is_some(), "info missing");
+    assert!(body.get("paths").is_some(), "paths missing");
+}
+
+#[tokio::test]
+async fn openapi_paths_cover_every_generated_entity() {
+    let base = serve_openapi().await;
+    let body: Value = reqwest::get(format!("{}/openapi.json", base))
+        .await
+        .expect("GET")
+        .json()
+        .await
+        .expect("json");
+    let paths = body.get("paths").and_then(|v| v.as_object()).expect("paths");
+    let expected: &[&str] = &[
+{{&expectedPaths}}
+    ];
+    for path in expected {
+        assert!(
+            paths.contains_key(*path),
+            "openapi.paths missing entry for {}",
+            path
+        );
+    }
+}

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { generate } from "./generate-routes-tests.ts";
+import { generate } from "../src/generate-routes-tests.ts";
 
 const DS_YAML = `types:
   - user:
@@ -94,7 +94,7 @@ describe("generate-routes-tests", () => {
     assert.match(users, /uri\("\/api\/users\/email\/missing"\)/);
     assert.match(users, /fn get_user_by_role_id_returns_items/);
     assert.match(users, /uri\("\/api\/users\/role-id\/x"\)/);
-    assert.doesNotMatch(users, /if-match/);
+    assert.match(users, /header\("if-match", "2020-01-01T00:00:00.000Z"\)/);
     assert.doesNotMatch(users, /get_user_by_slug/);
 
     const roles = textOf(entries, "roles_tests.rs");
