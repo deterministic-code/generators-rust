@@ -21,18 +21,23 @@ const generateFrom = (
   deterministic: IDeterministic,
   settings: Record<string, string>,
 ): GenerateEntry[] => {
-  const idType = settings["datasource.id_type"] ?? "integer";
   const naming = servicePaths(settings);
-  return deterministic.services.generics.map((c) =>
-    content(
+  return deterministic.services.generics.map((c) => {
+    const table = deterministic.expandedDatasourceTypes.find(
+      (t) => t.name === c.name,
+    );
+    return content(
       testPath(c.name, naming),
       fill(genericTmpl, {
         structName: naming.serviceClassName(c.name),
         fileBase: naming.fileBase(c.name),
-        missingId: missingIdExpr(idType),
+        missingId: missingIdExpr(
+          table?.fields.find((f) => f.name === (table.primaryKeyColumn ?? "id"))
+            ?.type ?? "integer",
+        ),
       }),
-    ),
-  );
+    );
+  });
 };
 
 export const generate = async (

@@ -5,9 +5,8 @@ import { routePaths, type RoutePaths } from "./common/paths.ts";
 import {
   DeterministicParser,
   ROUTES_YAML,
-  primaryKeyFor,
   entityUsesOptimisticConcurrency,
-  type DatasourceType,
+  type ExpandedDatasourceType,
   type RouteByField,
   type RouteCandidate,
   type IDeterministic,
@@ -21,9 +20,8 @@ import {
 
 type EmitOptions = {
   naming: RoutePaths;
-  idType: string;
   useOcc: boolean;
-  datasources: DatasourceType[];
+  datasources: ExpandedDatasourceType[];
 };
 
 const testPath = (entity: string, naming: RoutePaths): string => {
@@ -64,7 +62,7 @@ const renderTest = (
   candidate: RouteCandidate,
   opts: EmitOptions,
 ): GenerateEntry => {
-  const pk = primaryKeyFor(candidate.name, opts.datasources, opts.idType);
+  const table = opts.datasources.find((d) => d.name === candidate.name);
   const path = testPath(candidate.name, opts.naming);
   const mountPath = `/api/${opts.naming.apiPath(candidate.name)}`;
   const occ = entityUsesOptimisticConcurrency(candidate, opts.useOcc);
@@ -77,7 +75,10 @@ const renderTest = (
     className: opts.naming.serviceClassName(candidate.name),
     entitySnake: candidate.name,
     mountPath,
-    missingId: missingIdExpr(pk.idType),
+    missingId: missingIdExpr(
+      table?.fields.find((f) => f.name === (table.primaryKeyColumn ?? "id"))
+        ?.type ?? "integer",
+    ),
     occ,
     byFieldsBlock: byFieldsBlock(candidate.name, mountPath, candidate.byFields),
   };
@@ -91,13 +92,11 @@ const generateFrom = (
   deterministic: IDeterministic,
   settings: Record<string, string>,
 ): GenerateEntry[] => {
-  const idType = settings["datasource.id_type"] ?? "integer";
   const parsed = deterministic.routes;
   const opts: EmitOptions = {
     naming: routePaths(settings),
-    idType,
     useOcc: settings["datasource.use_optimistic_concurrency"] !== "false",
-    datasources: parsed.datasources,
+    datasources: deterministic.expandedDatasourceTypes,
   };
   return parsed.candidates.map((c) => renderTest(c, opts));
 };

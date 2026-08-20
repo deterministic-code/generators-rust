@@ -5,7 +5,7 @@ import { datasourcePaths, routePaths } from "./common/paths.ts";
 import {
   DeterministicParser,
   DATASOURCE_TYPES_YAML,
-  type DatasourceType,
+  type ExpandedDatasourceType,
   type IDeterministic,
 } from "./specification-parser.ts";
 import {
@@ -35,7 +35,7 @@ const jsonSample = (type: string): string => {
   }
 };
 
-const samplePayload = (table: DatasourceType): string => {
+const samplePayload = (table: ExpandedDatasourceType): string => {
   const parts = table.fields
     .filter(
       (f) =>
@@ -51,14 +51,11 @@ const generateFrom = (
   deterministic: IDeterministic,
   settings: Record<string, string>,
 ): GenerateEntry[] => {
-  const idType = settings["datasource.id_type"] ?? "integer";
   const naming = routePaths(settings);
   const names = datasourcePaths(settings);
   const tables = deterministic.expandedDatasourceTypes.filter(
     (t) => t.datasourceType !== "many-to-many",
   );
-  const missing =
-    idType === "uuid" ? "00000000-0000-0000-0000-000000000000" : "99999";
   const setups = tables
     .map((t) =>
       fill(setupTmpl, {
@@ -73,7 +70,13 @@ const generateFrom = (
         entity: t.name,
         pascal: names.className(t.name),
         segment: naming.apiPath(t.name),
-        missing,
+        missing:
+          (
+            t.fields.find((f) => f.name === t.primaryKeyColumn)?.type ??
+            "integer"
+          ) === "uuid"
+            ? "00000000-0000-0000-0000-000000000000"
+            : "99999",
         payload: samplePayload(t),
       };
       const tmpl =

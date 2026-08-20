@@ -5,15 +5,15 @@ import { servicePaths, type ServicePaths } from "./common/paths.ts";
 import {
   DeterministicParser,
   SERVICES_YAML,
-  type DatasourceType,
+  type ExpandedDatasourceType,
   type IDeterministic,
 } from "./specification-parser.ts";
 import { genericTmpl } from "./resources/service-integration-tests.ts";
 
 const tableByName = (
   name: string,
-  datasources: DatasourceType[],
-): DatasourceType | undefined => datasources.find((d) => d.name === name);
+  datasources: ExpandedDatasourceType[],
+): ExpandedDatasourceType | undefined => datasources.find((d) => d.name === name);
 
 const testPath = (entity: string, naming: ServicePaths): string => {
   const file = `${naming.fileBase(entity)}_integration_tests.rs`;
@@ -31,17 +31,20 @@ const generateFrom = (
   deterministic: IDeterministic,
   settings: Record<string, string>,
 ): GenerateEntry[] => {
-  const idType = settings["datasource.id_type"] ?? "integer";
   const naming = servicePaths(settings);
   const { generics } = deterministic.services;
   const datasources = deterministic.expandedDatasourceTypes;
-  const withUuid = idType !== "uuid";
   return generics
     .filter(
       (c) => tableByName(c.name, datasources)?.datasourceType === "many-to-many",
     )
-    .map((c) =>
-      content(
+    .map((c) => {
+      const table = tableByName(c.name, datasources);
+      const pkType =
+        table?.fields.find((f) => f.name === (table.primaryKeyColumn ?? "id"))
+          ?.type ?? "integer";
+      const withUuid = table?.fields.some((f) => f.name === "uuid") === true;
+      return content(
         testPath(c.name, naming),
         fill(genericTmpl, {
           structName: naming.serviceClassName(c.name),
@@ -51,10 +54,10 @@ const generateFrom = (
           stampColsIdent: withUuid
             ? "id_uuid_created_updated"
             : "id_created_updated",
-          missingId: missingIdExpr(idType),
+          missingId: missingIdExpr(pkType),
         }),
-      ),
-    );
+      );
+    });
 };
 
 export const generate = async (
