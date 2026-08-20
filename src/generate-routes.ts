@@ -8,12 +8,11 @@ import {
 } from "./common/paths.ts";
 import { convertSpecType } from "./base-type-converter.ts";
 import {
-  inheritedIdType,
   DeterministicParser,
   ROUTES_YAML,
   entityUsesOptimisticConcurrency,
   type DatasourceField,
-  type DatasourceType,
+  type ExpandedDatasourceType,
   type NestedRouteDescriptor,
   type RouteByField,
   type RouteCandidate,
@@ -71,11 +70,9 @@ type NormalizedByField = {
 
 type EmitOptions = {
   naming: RoutePaths;
-  idType: string;
-  rustIdType: string;
   useOptimisticConcurrency: boolean;
   views: ViewType[];
-  datasources: DatasourceType[];
+  datasources: ExpandedDatasourceType[];
   nested: NestedRouteDescriptor[];
 };
 
@@ -83,13 +80,10 @@ const emitOptions = async (
   settings: Record<string, string>,
   views: ViewType[],
   nested: NestedRouteDescriptor[],
-  datasources: DatasourceType[],
+  datasources: ExpandedDatasourceType[],
 ): Promise<EmitOptions> => {
-  const idType = settings["datasource.id_type"] ?? "integer";
   return {
     naming: routePaths(settings),
-    idType,
-    rustIdType: convertSpecType(inheritedIdType(idType)),
     useOptimisticConcurrency:
       settings["datasource.use_optimistic_concurrency"] !== "false",
     views,
@@ -262,32 +256,23 @@ const idTypeVariantForPk = (primaryKey: PrimaryKey): string => {
   }
 };
 
-const idTypeFromFieldType = (fieldType: string): string => {
-  if (fieldType === "string") return "string";
-  if (fieldType === "uuid") return "uuid";
-  return "integer";
-};
-
 const inferPrimaryKey = (
-  ds: DatasourceType | undefined,
-  opts: EmitOptions,
+  ds: ExpandedDatasourceType | undefined,
 ): PrimaryKey => {
-  if (ds !== undefined) {
-    const custom = ds.fields.find(
-      (f) => f.isPrimaryKey === true && f.name !== "id",
-    );
-    if (custom !== undefined) {
-      return {
-        column: custom.name,
-        rustType: custom.type === "number" ? "i64" : "String",
-        idType: idTypeFromFieldType(custom.type),
-      };
-    }
+  const column = ds?.primaryKeyColumn ?? "id";
+  const field = ds?.fields.find((f) => f.name === column);
+  const pkType = field?.type ?? "integer";
+  if (column !== "id" && field !== undefined) {
+    return {
+      column,
+      rustType: field.type === "number" ? "i64" : "String",
+      idType: pkType,
+    };
   }
   return {
-    column: "id",
-    rustType: opts.rustIdType,
-    idType: opts.idType,
+    column,
+    rustType: convertSpecType(field?.type ?? "integer"),
+    idType: pkType,
   };
 };
 
@@ -337,7 +322,7 @@ const eagerWriteChildrenForEntity = (
 
 const fieldsForEntity = (
   entity: string,
-  datasources: DatasourceType[],
+  datasources: ExpandedDatasourceType[],
 ): Field[] => {
   const ds = datasources.find((d) => d.name === entity);
   if (ds === undefined) return [];
@@ -378,7 +363,6 @@ const renderReadOnly = (
   const path = `/api/${naming.apiPath(entitySnake)}`;
   const pk = inferPrimaryKey(
     opts.datasources.find((d) => d.name === entitySnake),
-    opts,
   );
   const normalizedByFields = normalizeByFields(candidate.byFields);
   const tokens = {
@@ -414,7 +398,6 @@ const renderCrud = (
   );
   const pk = inferPrimaryKey(
     opts.datasources.find((d) => d.name === entitySnake),
-    opts,
   );
   const normalizedByFields = normalizeByFields(candidate.byFields);
   const hasByFields = normalizedByFields.length > 0;
@@ -504,7 +487,7 @@ const generateFrom = async (
     settings,
     deterministic.viewTypes,
     parsed.nested,
-    parsed.datasources,
+    deterministic.expandedDatasourceTypes,
   );
   const entries: GenerateEntry[] = parsed.candidates.map((c) =>
     renderEntityRouter(c, opts),

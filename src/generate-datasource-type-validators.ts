@@ -4,11 +4,10 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { datasourcePaths, type ArtifactPaths } from "./common/paths.ts";
 import {
-  inheritedIdType,
   DeterministicParser,
   DATASOURCE_TYPES_YAML,
   type DatasourceField,
-  type DatasourceType,
+  type ExpandedDatasourceType,
   type IDeterministic,
 } from "./specification-parser.ts";
 import { convertSpecType } from "./base-type-converter.ts";
@@ -16,13 +15,11 @@ import { isFiniteInt, isFiniteNumber } from "@deterministic-code/generators-comm
 import { typeTmpl } from "./resources/datasource-type-validators.ts";
 
 type EmitOptions = {
-  idType: string;
   naming: ArtifactPaths;
   schemaVersion: string;
 };
 
 const emitOptions = (settings: Record<string, string>): EmitOptions => ({
-  idType: settings["datasource.id_type"] ?? "integer",
   naming: datasourcePaths(settings),
   schemaVersion: settings["codegen.schema_version"] ?? "1.0",
 });
@@ -116,17 +113,16 @@ const checksForField = (
   isStandardId = false,
 ): string[] => {
   const prop = opts.naming.fieldName(field.name);
-  const { idType } = opts;
   if (isStandardId) {
-    if (idType === "string") return [];
-    if (idType === "uuid") {
+    if (field.type === "string") return [];
+    if (field.type === "uuid") {
       return uuidChecks(prop, `obj.${prop}.to_string()`).map((l) => pad(1, l));
     }
     return [
       pad(
         1,
         errIf(
-          `obj.${prop} < 0${convertSpecType(inheritedIdType(idType))}`,
+          `obj.${prop} < 0${convertSpecType(field.type)}`,
           `${prop}: must be nonnegative`,
         ),
       ),
@@ -161,7 +157,7 @@ const typePath = (entity: string, naming: ArtifactPaths): string => {
 };
 
 const renderValidator = (
-  table: DatasourceType,
+  table: ExpandedDatasourceType,
   opts: EmitOptions,
 ): GenerateEntry => {
   const lines = table.fields.flatMap((field) =>
