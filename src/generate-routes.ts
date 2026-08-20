@@ -89,7 +89,7 @@ const emitOptions = async (
     idType,
     rustIdType: convertSpecType(inheritedIdType(idType)),
     useOptimisticConcurrency:
-      settings["datasource.use_optimistic_concurrency"] === "true",
+      settings["datasource.use_optimistic_concurrency"] !== "false",
     views,
     datasources,
     nested,
