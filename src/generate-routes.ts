@@ -6,7 +6,6 @@ import { convertSpecType } from "./base-type-converter.ts";
 import {
   DeterministicParser,
   ROUTES_YAML,
-  primaryKeyColumn,
   type DatasourceField,
   type DatasourceType,
   type NestedRouteDescriptor,
@@ -231,7 +230,8 @@ const idTypeVariantForPk = (primaryKey: PrimaryKey): string => {
 const inferPrimaryKey = (
   ds: DatasourceType | undefined,
 ): PrimaryKey => {
-  const column = primaryKeyColumn(ds);
+  const column =
+    ds?.fields.find((f) => f.isPrimaryKey === true)?.name ?? "id";
   const field = ds?.fields.find((f) => f.name === column);
   const pkType = field?.type ?? "integer";
   if (column !== "id" && field !== undefined) {
