@@ -27,14 +27,18 @@ pub fn emit_step(step: &str, deterministic_dir: &Path, output: &Path) {
 
 /// migrate-setup then migrate-up for `provider` against `connection`, applying every migration under `migrations_dir` in order.
 fn run_migrate_chain(provider: &str, connection: &str, migrations_dir: &Path) {
-    let setup_status = Command::new(env!("CARGO_BIN_EXE_migrate-setup"))
+    let setup = option_env!("CARGO_BIN_EXE_migrate-setup")
+        .expect("migrate-setup bin is not built for this crate");
+    let up = option_env!("CARGO_BIN_EXE_migrate-up")
+        .expect("migrate-up bin is not built for this crate");
+    let setup_status = Command::new(setup)
         .args(["--provider", provider])
         .args(["--connection", connection])
         .status()
         .expect("spawn migrate-setup");
     assert!(setup_status.success(), "migrate-setup failed");
 
-    let up_status = Command::new(env!("CARGO_BIN_EXE_migrate-up"))
+    let up_status = Command::new(up)
         .args(["--provider", provider])
         .args(["--connection", connection])
         .args(["--migrations-path", migrations_dir.to_str().unwrap()])

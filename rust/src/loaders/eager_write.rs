@@ -243,19 +243,125 @@ impl EagerWriteChildBinding {
 mod tests {
     use super::*;
     use crate::loaders::{parse_datasource_types, parse_routes, parse_view_types};
-    use std::path::PathBuf;
 
     fn load_demo() -> (RoutesDoc, ViewTypesDoc, Vec<DatasourceTypeDef>) {
-        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let det = manifest.join("../samples/demo-backend/deterministic");
-        let routes =
-            parse_routes(&std::fs::read_to_string(det.join("routes.yaml")).unwrap()).unwrap();
-        let views =
-            parse_view_types(&std::fs::read_to_string(det.join("view_types.yaml")).unwrap())
-                .unwrap();
-        let ds = parse_datasource_types(
-            &std::fs::read_to_string(det.join("datasource_types.yaml")).unwrap(),
-        )
+        // Self-contained fixture mirroring samples/demo-backend relations the
+        // eager-write tests assert: contact→address/phone, todo→task/meeting,
+        // user→post→tag (M2M via post_tag).
+        let routes = parse_routes(concat!(
+            "includes:\n",
+            "  - view_type_routes:\n",
+            "      eager_path:\n",
+            "        - user.posts.tags\n",
+            "        - todo.tasks\n",
+            "        - todo.meetings\n",
+            "        - post.tags\n",
+            "      eager_write_path:\n",
+            "        - contact.addresses\n",
+            "        - contact.phones\n",
+            "        - todo.tasks\n",
+            "        - todo.meetings\n",
+            "        - user.posts\n",
+            "        - user.posts.tags\n",
+            "        - post.tags\n",
+            "routes: []\n",
+        ))
+        .unwrap();
+        let views = parse_view_types(concat!(
+            "types:\n",
+            "  - user:\n",
+            "      inherits: datasource_types.user\n",
+            "      fields:\n",
+            "        - posts:\n",
+            "            type: datasource_types.post[]\n",
+            "            references: datasource_types.post.author_id\n",
+            "  - post:\n",
+            "      inherits: datasource_types.post\n",
+            "      fields:\n",
+            "        - tags:\n",
+            "            type: datasource_types.tag[]\n",
+            "            references: datasource_types.post_tag.post_id\n",
+            "  - todo:\n",
+            "      inherits: datasource_types.todo\n",
+            "      fields:\n",
+            "        - tasks:\n",
+            "            type: datasource_types.task[]\n",
+            "            references: datasource_types.task.todo_id\n",
+            "        - meetings:\n",
+            "            type: datasource_types.meeting[]\n",
+            "            references: datasource_types.meeting.todo_id\n",
+            "  - contact:\n",
+            "      inherits: datasource_types.contact\n",
+            "      fields:\n",
+            "        - addresses:\n",
+            "            type: datasource_types.address[]\n",
+            "            references: datasource_types.address.contact_id\n",
+            "        - phones:\n",
+            "            type: datasource_types.phone[]\n",
+            "            references: datasource_types.phone.contact_id\n",
+        ))
+        .unwrap();
+        let ds = parse_datasource_types(concat!(
+            "types:\n",
+            "  - user:\n",
+            "      fields:\n",
+            "        - username:\n",
+            "            type: string\n",
+            "  - post:\n",
+            "      fields:\n",
+            "        - author_id:\n",
+            "            type: number\n",
+            "            references: user.id\n",
+            "        - title:\n",
+            "            type: string\n",
+            "  - tag:\n",
+            "      fields:\n",
+            "        - name:\n",
+            "            type: string\n",
+            "  - post_tag:\n",
+            "      datasource_type: many-to-many\n",
+            "      fields:\n",
+            "        - post_id:\n",
+            "            type: number\n",
+            "            references: post.id\n",
+            "        - tag_id:\n",
+            "            type: number\n",
+            "            references: tag.id\n",
+            "  - todo:\n",
+            "      fields:\n",
+            "        - title:\n",
+            "            type: string\n",
+            "  - task:\n",
+            "      fields:\n",
+            "        - todo_id:\n",
+            "            type: number\n",
+            "            references: todo.id\n",
+            "        - description:\n",
+            "            type: string\n",
+            "  - meeting:\n",
+            "      fields:\n",
+            "        - todo_id:\n",
+            "            type: number\n",
+            "            references: todo.id\n",
+            "  - contact:\n",
+            "      fields:\n",
+            "        - name:\n",
+            "            type: string\n",
+            "  - address:\n",
+            "      fields:\n",
+            "        - contact_id:\n",
+            "            type: number\n",
+            "            references: contact.id\n",
+            "        - line1:\n",
+            "            type: string\n",
+            "  - phone:\n",
+            "      fields:\n",
+            "        - contact_id:\n",
+            "            type: number\n",
+            "            references: contact.id\n",
+            "        - number:\n",
+            "            type: string\n",
+        ))
         .unwrap();
         (routes, views, ds.types)
     }

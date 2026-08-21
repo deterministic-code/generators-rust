@@ -12,14 +12,6 @@ repository = "https://github.com/rmcfadden/deterministic"
 name = "deterministic"
 path = "src/lib.rs"
 
-[[bin]]
-name = "migrate-setup"
-path = "../scripts/templates/create-backend-app/rust/migrate_setup.rs"
-
-[[bin]]
-name = "migrate-up"
-path = "../scripts/templates/create-backend-app/rust/migrate_up.rs"
-
 [dependencies]
 async-trait = "0.1"
 dotenvy = "0.15"
