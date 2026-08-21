@@ -100,7 +100,7 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R src/templates dist/",
     "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "test": "node --experimental-strip-types --test test/*.test.ts src/common/default-casing.test.ts"
+    "test": "node --experimental-strip-types --test test/*.test.ts src/common/default-casing.test.ts src/import-generator.test.ts"
   },
   "dependencies": {
     "@deterministic-code/generators-common": "github:deterministic-code/generators-common",

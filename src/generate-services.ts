@@ -3,9 +3,9 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
-  servicePaths,
-  type ServicePaths,
-} from "./common/paths.ts";
+  createImportGenerator,
+  type RustImportGenerator,
+} from "./import-generator.ts";
 import {
   DeterministicParser,
   SERVICES_YAML,
@@ -22,55 +22,20 @@ const STATUS_OK_DEFAULTS: Record<string, Record<string, string>> = {
 };
 
 type EmitOptions = {
-  naming: ServicePaths;
+  imports: RustImportGenerator;
 };
 
 const emitOptions = (settings: Record<string, string>): EmitOptions => ({
-  naming: servicePaths(settings),
+  imports: createImportGenerator(".", settings),
 });
-
-const moduleParts = (mod: string): string[] => {
-  const parts = mod.split("/").filter((p) => p !== "" && p !== ".");
-  while (parts.length && parts[0] === "..") parts.shift();
-  return parts;
-};
 
 const structNameFor = (entryName: string): string => {
   if (/^[A-Z]/.test(entryName) && !entryName.includes("_")) return entryName;
   return pascalCase(entryName);
 };
 
-const resolveCustomGeneratePath = (
-  entry: CustomServiceEntry,
-  naming: ServicePaths,
-  byFeature: boolean,
-): string => {
-  const fileBase = naming.casedFileStem(entry.name);
-  const mod = entry.module;
-
-  if (byFeature) {
-    if (!mod || !mod.startsWith(".")) return naming.customStubPath(entry.name);
-    if (mod.startsWith("./services/") || mod.startsWith("./routes/")) {
-      return naming.customStubPath(entry.name);
-    }
-    const parts = moduleParts(mod);
-    if (parts[0] !== "features") {
-      const suggestion = naming.customStubPath(entry.name);
-      throw new Error(
-        `generateCustomServiceStub: service "${entry.name}" has module "${mod}" which is outside ./features/. ` +
-          `When organize=by-feature, custom services must live under features/<entity>/custom/. ` +
-          `Drop the module: field to use the convention default (${suggestion.replace(/\.rs$/, "")}), ` +
-          `or point module: into ./features/.`,
-      );
-    }
-    return `${parts.join("/")}.rs`;
-  }
-
-  if (!mod || !mod.startsWith(".")) return `../custom/${fileBase}.rs`;
-  const parts = moduleParts(mod);
-  if (parts[0] === "services") parts.shift();
-  return `../${parts.join("/")}.rs`;
-};
+const serviceClassName = (entity: string): string =>
+  pascalCase(`${entity}_service`);
 
 const defaultBodyFor = (serviceName: string, method: string): string => {
   const known = STATUS_OK_DEFAULTS[serviceName]?.[method];
@@ -85,9 +50,9 @@ const renderGeneric = (
   candidate: ServiceCandidate,
   opts: EmitOptions,
 ): GenerateEntry => {
-  const structName = opts.naming.serviceClassName(candidate.name);
+  const structName = serviceClassName(candidate.name);
   return content(
-    opts.naming.filePath(candidate.name),
+    opts.imports.service(candidate.name),
     fill(genericTmpl, {
       structName,
       entitySnakeLiteral: JSON.stringify(candidate.name),
@@ -105,7 +70,7 @@ const renderCustom = (
     body: defaultBodyFor(entry.name, method),
   }));
   return content(
-    resolveCustomGeneratePath(entry, opts.naming, opts.naming.byFeature),
+    opts.imports.serviceCustom(entry.name, entry.module),
     fill(customStubTmpl, {
       structName,
       useJsonMacro: useJsonMacro(entry.name),
@@ -136,10 +101,9 @@ export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   await ctx.reader.read(SERVICES_YAML);
-  const naming = servicePaths(ctx.settings);
   return generateFrom(
     await DeterministicParser(ctx.reader).parse(ctx.settings, {
-      serviceClassName: naming.serviceClassName,
+      serviceClassName,
     }),
     ctx.settings,
   );

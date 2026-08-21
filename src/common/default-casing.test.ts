@@ -20,14 +20,6 @@ describe("createCasing Auto defaults", () => {
     assert.equal(casing.filePath(NAME), "notificationType.rs");
     assert.equal(casing.serviceClassName("user"), "UserService");
   });
-
-  it("puts Auto files under a cased feature directory", () => {
-    const casing = createCasing({ "other.organize_by_feature": "true" });
-    assert.equal(
-      casing.filePath(NAME),
-      "features/notificationType/notificationType.rs",
-    );
-  });
 });
 
 describe("createCasing overrides", () => {
@@ -45,16 +37,13 @@ describe("createCasing overrides", () => {
     assert.equal(casing.filePath(NAME), "NotificationType.rs");
   });
 
-  it("kebabs directories with snake files", () => {
+  it("kebabs directories independently of files", () => {
     const casing = createCasing({
-      "other.organize_by_feature": "true",
       "languages.rust.casing.file_names": "Snake",
       "languages.rust.casing.directories": "Kebab",
     });
-    assert.equal(
-      casing.filePath(NAME),
-      "features/notification-type/notification_type.rs",
-    );
+    assert.equal(casing.fileBase(NAME), "notification_type");
+    assert.equal(casing.directory(NAME), "notification-type");
   });
 
   it("camels fields", () => {

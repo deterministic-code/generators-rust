@@ -1,7 +1,11 @@
+import { pascalCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { viewPaths, type ArtifactPaths } from "./common/paths.ts";
+import {
+  createImportGenerator,
+  type RustImportGenerator,
+} from "./import-generator.ts";
 import {
   emitViewFields,
   inlinesParent,
@@ -27,40 +31,28 @@ const docTokens = (settings: Record<string, string>) => {
 };
 
 type EmitOptions = {
-  naming: ArtifactPaths;
+  imports: RustImportGenerator;
   schemaVersion: string;
   simpleDoc: boolean;
   descriptionDoc: boolean;
 };
 
 const emitOptions = (settings: Record<string, string>): EmitOptions => ({
-  naming: viewPaths(settings),
+  imports: createImportGenerator(".", settings),
   schemaVersion: settings["codegen.schema_version"] ?? "1.0",
   ...docTokens(settings),
 });
 
-const qual = (
-  entity: string,
-  kind: "datasource" | "view",
-  naming: ArtifactPaths,
-): string => {
-  const cls = naming.className(entity);
-  if (naming.byFeature) {
-    const stem = naming.filePath(entity).replace(/\.rs$/, "");
-    return `crate::${stem.split("/").join("::")}::${cls}`;
-  }
-  const ns =
-    kind === "datasource"
-      ? "crate::types::generated::datasource"
-      : "crate::types::generated::views";
-  return `${ns}::${cls}`;
-};
+const className = (entity: string): string => pascalCase(entity);
+const fieldName = (field: string): string => field;
 
 const rustTypeFor = (field: ViewField, opts: EmitOptions): string => {
   let base =
     field.kind === "primitive"
       ? convertSpecType(field.base)
-      : qual(field.base, field.kind, opts.naming);
+      : field.kind === "datasource"
+        ? opts.imports.datasourceQual(field.base)
+        : opts.imports.viewQual(field.base);
   if (field.isArray) base = `Vec<${base}>`;
   return field.isNullable ? `Option<${base}>` : base;
 };
@@ -71,7 +63,7 @@ const structFields = (
   opts: EmitOptions,
 ) => {
   const fields = emitViewFields(view, expanded).map((f) => ({
-    ident: opts.naming.fieldName(f.name),
+    ident: fieldName(f.name),
     rustType: rustTypeFor(f, opts),
   }));
   if (
@@ -82,7 +74,7 @@ const structFields = (
     return [
       {
         ident: "base",
-        rustType: qual(view.inherits, "datasource", opts.naming),
+        rustType: opts.imports.datasourceQual(view.inherits),
       },
       ...fields,
     ];
@@ -95,13 +87,13 @@ const renderView = (
   expanded: ViewType | undefined,
   opts: EmitOptions,
 ): GenerateEntry => {
-  const structName = opts.naming.className(view.name);
+  const structName = className(view.name);
   const isUnion = view.kind === "union";
   const alias = !isUnion && isAlias(view);
   const isStruct = !isUnion && !alias;
   const fields = isUnion ? [] : structFields(view, expanded, opts);
   return content(
-    opts.naming.filePath(view.name),
+    opts.imports.view(view.name),
     fill(typeTmpl, {
       schemaVersion: opts.schemaVersion,
       simpleDoc: opts.simpleDoc,
@@ -115,14 +107,14 @@ const renderView = (
       isAlias: alias,
       aliasType:
         !isUnion && view.inherits !== null
-          ? qual(view.inherits, "datasource", opts.naming)
+          ? opts.imports.datasourceQual(view.inherits)
           : "",
       isUnion,
       isStruct,
       members: isUnion
         ? view.members.map((m) => ({
-            variant: opts.naming.className(m),
-            memberType: qual(m, "view", opts.naming),
+            variant: className(m),
+            memberType: opts.imports.viewQual(m),
           }))
         : [],
       fields,
