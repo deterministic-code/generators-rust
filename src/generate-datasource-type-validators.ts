@@ -6,7 +6,7 @@ import {
   DeterministicParser,
   DATASOURCE_TYPES_YAML,
   type DatasourceField,
-  type ExpandedDatasourceType,
+  type DatasourceType,
   type IDeterministic,
 } from "./specification-parser.ts";
 import { convertSpecType } from "./base-type-converter.ts";
@@ -136,7 +136,7 @@ class Generator extends Emit {
     );
   }
 
-  private validator(table: ExpandedDatasourceType): GenerateEntry {
+  private validator(table: DatasourceType): GenerateEntry {
     const lines = table.fields.flatMap((field) =>
       checksForField(field, this.casing, field.name === "id"),
     );

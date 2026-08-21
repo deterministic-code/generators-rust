@@ -22,8 +22,8 @@ class Generator extends Emit {
           structName: this.casing.serviceClassName(c.name),
           fileBase: this.casing.fileBase(`${c.name}_service`),
           missingId: missingIdExpr(
-            table?.fields.find((f) => f.name === (table.primaryKeyColumn ?? "id"))
-              ?.type ?? "integer",
+            table?.fields.find((f) => f.isPrimaryKey === true)?.type ??
+              "integer",
           ),
         }),
       );
