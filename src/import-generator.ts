@@ -1,5 +1,4 @@
 import { posix } from "node:path";
-import { kebabCase, pascalCase, snakeCase } from "change-case";
 import pluralize from "pluralize";
 import type { IImportGenerator } from "@deterministic-code/generators-common/import-generator";
 import { createCasing, type PackCasing } from "./common/default-casing.ts";
@@ -60,7 +59,11 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   datasource(entity: string): string {
-    return this.cased(this.underBase(this.featureFile(entity, entity)), entity);
+    const file = this.rsFile(entity);
+    const path = this.organizeByFeature
+      ? this.featurePath(entity, file)
+      : file;
+    return this.underBase(path);
   }
 
   datasourceRel(entity: string): string {
@@ -68,14 +71,19 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   datasourceQual(entity: string): string {
-    return this.typeQual(this.datasourceRel(entity), pascalCase(entity));
+    return this.typeQual(
+      this.datasourceRel(entity),
+      this.casing.convertTypes(entity),
+    );
   }
 
   datasourceValidator(entity: string): string {
     if (this.organizeByFeature) {
-      return this.underBase(`features/${entity}/${entity}_validator.rs`);
+      return this.underBase(
+        this.featurePath(entity, this.rsFile(`${entity}_validator`)),
+      );
     }
-    return this.underBase(`datasource_${entity}_validator.rs`);
+    return this.underBase(this.rsFile(`datasource_${entity}_validator`));
   }
 
   datasourceValidatorRel(entity: string): string {
@@ -86,7 +94,11 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   view(entity: string): string {
-    return this.underBase(this.featureFile(entity, entity, featureEntity(entity)));
+    const file = this.rsFile(entity);
+    const path = this.organizeByFeature
+      ? this.featurePath(featureEntity(entity), file)
+      : file;
+    return this.underBase(path);
   }
 
   viewRel(entity: string): string {
@@ -94,16 +106,15 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   viewQual(entity: string): string {
-    return this.typeQual(this.viewRel(entity), pascalCase(entity));
+    return this.typeQual(this.viewRel(entity), this.casing.convertTypes(entity));
   }
 
   viewValidator(entity: string): string {
+    const file = this.rsFile(`${entity}_validator`);
     if (this.organizeByFeature) {
-      return this.underBase(
-        `features/${featureEntity(entity)}/${entity}_validator.rs`,
-      );
+      return this.underBase(this.featurePath(featureEntity(entity), file));
     }
-    return this.underBase(`${entity}_validator.rs`);
+    return this.underBase(file);
   }
 
   viewValidatorRel(entity: string): string {
@@ -114,7 +125,11 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   service(entity: string): string {
-    return this.underBase(this.featureFile(entity, `${entity}_service`));
+    const file = `${this.serviceStem(entity)}.rs`;
+    const path = this.organizeByFeature
+      ? this.featurePath(entity, file)
+      : file;
+    return this.underBase(path);
   }
 
   serviceRel(entity: string): string {
@@ -126,10 +141,10 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   serviceCustomRel(entity: string): string {
-    const stem = `${entity}_service`;
+    const file = `${this.serviceStem(entity)}.rs`;
     return this.organizeByFeature
-      ? `features/${entity}/custom/${stem}.rs`
-      : `services/custom/${stem}.rs`;
+      ? `features/${this.casing.directory(entity)}/custom/${file}`
+      : `services/custom/${file}`;
   }
 
   serviceTest(entity: string): string {
@@ -141,9 +156,9 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   serviceIntegrationTest(entity: string): string {
-    const file = `${entity}_service_integration_tests.rs`;
+    const file = this.rsFile(`${entity}_service_integration_tests`);
     if (this.organizeByFeature) {
-      return `features/${entity}/__tests__/${file}`;
+      return `features/${this.casing.directory(entity)}/__tests__/${file}`;
     }
     return file;
   }
@@ -160,7 +175,11 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   route(entity: string): string {
-    return this.underBase(this.featureFile(entity, this.routeStem(entity)));
+    const file = `${this.routeStem(entity)}.rs`;
+    const path = this.organizeByFeature
+      ? this.featurePath(entity, file)
+      : file;
+    return this.underBase(path);
   }
 
   routeRel(entity: string): string {
@@ -180,7 +199,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   test(srcFile: string, fileBase: string): string {
-    const file = `${fileBase}_tests.rs`;
+    const file = `${this.casing.fileBase(`${fileBase}_tests`)}.rs`;
     if (this.organizeByFeature) {
       return `${posix.dirname(srcFile)}/__tests__/${file}`;
     }
@@ -228,7 +247,11 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   apiPath(entity: string): string {
-    return kebabCase(pluralSnake(entity)).replace(/_/g, "-");
+    return pluralSnake(entity).replace(/_/g, "-");
+  }
+
+  frontend(relPath: string): string {
+    return posix.join("frontend", relPath);
   }
 
   private rel(prefix: string, file: string): string {
@@ -244,32 +267,28 @@ export class RustImportGenerator implements IImportGenerator {
     return `${parts.join("::")}::${symbol}`;
   }
 
-  private cased(laid: string, entity: string): string {
-    const identityFile = `${entity}.rs`;
-    const casedFile = `${this.casing.fileBase(entity)}.rs`;
-    const withFile = laid.endsWith(identityFile)
-      ? laid.slice(0, -identityFile.length) + casedFile
-      : laid;
-    const identityDir = `/${entity}/`;
-    const casedDir = `/${this.casing.directory(entity)}/`;
-    return withFile.includes(identityDir)
-      ? withFile.replace(identityDir, casedDir)
-      : withFile;
+  private rsFile(stem: string): string {
+    return `${this.casing.fileBase(stem)}.rs`;
+  }
+
+  private featurePath(entity: string, file: string): string {
+    return `features/${this.casing.directory(entity)}/${file}`;
+  }
+
+  private serviceStem(entity: string): string {
+    return this.casing.fileBase(`${entity}_service`);
   }
 
   private routeStem(entity: string): string {
     const plural = pluralSnake(entity);
-    return this.organizeByFeature ? `${plural}_router` : plural;
+    return this.casing.fileBase(
+      this.organizeByFeature ? `${plural}_router` : plural,
+    );
   }
 
   private underBase(file: string): string {
     if (!this.flat) return file;
     return `${this.basePath}/${file}`;
-  }
-
-  private featureFile(entity: string, stem: string, dir = entity): string {
-    const file = `${stem}.rs`;
-    return this.organizeByFeature ? `features/${dir}/${file}` : file;
   }
 
   private resolveCustom(
@@ -282,13 +301,13 @@ export class RustImportGenerator implements IImportGenerator {
       layer === "services"
         ? "generateCustomServiceStub"
         : "generateCustomRouteStub";
-    const fileBase = snakeCase(name);
+    const file = this.rsFile(name);
     const entity = (
       featureEntityFromClass(name) || "shared"
     ).replace(/-/g, "_");
     const defaultStub = this.organizeByFeature
-      ? `features/${entity}/custom/${fileBase}.rs`
-      : `../custom/${fileBase}.rs`;
+      ? `features/${this.casing.directory(entity)}/custom/${file}`
+      : `../custom/${file}`;
     if (this.organizeByFeature) {
       if (
         !mod ||

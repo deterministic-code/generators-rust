@@ -130,7 +130,7 @@ describe("generate view type validators tests", () => {
 
   it("covers parse and nullable cases for a shaped view", async () => {
     const card = await bodyOf(
-      "card_payment_tests.rs",
+      "cardPaymentTests.rs",
       {},
       SIMPLE_VIEW_YAML,
       undefined,
@@ -142,7 +142,7 @@ describe("generate view type validators tests", () => {
   });
 
   it("emits union member accept cases", async () => {
-    const payment = await bodyOf("payment_tests.rs");
+    const payment = await bodyOf("paymentTests.rs");
     assert.match(payment, /fn accepts_card_payment_member/);
     assert.match(payment, /fn accepts_cash_payment_member/);
     assert.match(payment, /validate_payment\(&value\)\.is_ok\(\)/);
@@ -150,7 +150,7 @@ describe("generate view type validators tests", () => {
 
   it("writes codegen.schema_version into the file header", async () => {
     const card = await bodyOf(
-      "card_payment_tests.rs",
+      "cardPaymentTests.rs",
       { "codegen.schema_version": "9.9" },
       SIMPLE_VIEW_YAML,
       undefined,

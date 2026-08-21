@@ -115,7 +115,7 @@ describe("generate view types", () => {
   });
 
   it("renders a shaped view, a union enum, and an inlined inherit", async () => {
-    const card = await bodyOf("card_payment.rs");
+    const card = await bodyOf("cardPayment.rs");
     assert.match(card, /pub struct CardPayment/);
     assert.match(card, /pub amount: String/);
     assert.match(card, /pub tags: Vec</);
@@ -123,7 +123,7 @@ describe("generate view types", () => {
     const payment = await bodyOf("payment.rs");
     assert.match(payment, /pub enum Payment/);
     assert.match(payment, /CardPayment\(/);
-    const summary = await bodyOf("user_summary.rs");
+    const summary = await bodyOf("userSummary.rs");
     assert.match(summary, /pub struct UserSummary/);
     assert.match(summary, /pub display_name: String/);
     assert.match(summary, /pub email: String/);

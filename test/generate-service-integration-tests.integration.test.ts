@@ -64,10 +64,10 @@ describe("generate-service-integration-tests", () => {
     });
     assert.deepEqual(
       entries.map((e) => e.filename),
-      ["user_role_service_integration_tests.rs"],
+      ["userRoleServiceIntegrationTests.rs"],
     );
-    const body = textOf(entries, "user_role_service_integration_tests.rs");
-    assert.match(body, /use super::user_role_service::\*;/);
+    const body = textOf(entries, "userRoleServiceIntegrationTests.rs");
+    assert.match(body, /use super::userRoleService::\*;/);
     assert.match(body, /fn service\(\) -> UserRoleService/);
     assert.match(body, /SqliteDatasourceOptions::in_memory/);
     assert.match(body, /CREATE TABLE user_role/);
@@ -108,7 +108,7 @@ describe("generate-service-integration-tests", () => {
       reader: memoryReader(yaml),
       settings: { "datasource.id_type": "uuid" },
     });
-    const body = textOf(entries, "user_role_service_integration_tests.rs");
+    const body = textOf(entries, "userRoleServiceIntegrationTests.rs");
     assert.match(
       body,
       /fn add_inserts_a_row_and_auto_populates_id_created_updated/,
@@ -127,7 +127,7 @@ describe("generate-service-integration-tests", () => {
     });
     assert.deepEqual(
       entries.map((e) => e.filename),
-      ["features/user_role/__tests__/user_role_service_integration_tests.rs"],
+      ["features/userRole/__tests__/userRoleServiceIntegrationTests.rs"],
     );
   });
 

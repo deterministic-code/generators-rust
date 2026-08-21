@@ -96,7 +96,7 @@ describe("generate-routes", () => {
     assert.match(users, /field: "email"/);
     assert.match(users, /ByFieldMethod::Get/);
     assert.match(users, /coerce_row_types/);
-    assert.match(users, /use crate::services::generated::user_service::UserService;/);
+    assert.match(users, /use crate::services::generated::userService::UserService;/);
 
     const roles = textOf(entries, "roles.rs");
     assert.match(roles, /create_read_only_router/);

@@ -72,12 +72,12 @@ describe("generate-services", () => {
     const paths = entries
       .map((e) => e.filename)
       .sort();
-    assert.ok(paths.includes("user_service.rs"), `got: ${paths.join(", ")}`);
-    assert.ok(paths.includes("role_service.rs"));
-    assert.ok(paths.includes("../custom/report_service.rs"));
+    assert.ok(paths.includes("userService.rs"), `got: ${paths.join(", ")}`);
+    assert.ok(paths.includes("roleService.rs"));
+    assert.ok(paths.includes("../custom/reportService.rs"));
     assert.ok(paths.includes("../custom/health-check-service.rs"));
 
-    const user = textOf(entries, "user_service.rs");
+    const user = textOf(entries, "userService.rs");
     assert.match(user, /pub struct UserService/);
     assert.match(user, /inner: Arc<dyn DynamicService>/);
     assert.match(user, /pub fn from_inner\(inner: Arc<dyn DynamicService>\)/);
@@ -85,7 +85,7 @@ describe("generate-services", () => {
     assert.match(user, /impl DynamicService for UserService/);
     assert.match(user, /impl deterministic::routes::CrudService for UserService/);
 
-    const report = textOf(entries, "../custom/report_service.rs");
+    const report = textOf(entries, "../custom/reportService.rs");
     assert.match(report, /pub struct ReportService/);
     assert.match(report, /async fn run\(&self, _args: Value\)/);
     assert.match(report, /Ok\(serde_json::json!\(\{\}\)\)/);

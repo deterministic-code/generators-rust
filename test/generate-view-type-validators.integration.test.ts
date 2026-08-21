@@ -100,11 +100,11 @@ describe("generate view type validators", () => {
   });
 
   it("validates nested fields and union members", async () => {
-    const card = await bodyOf("card_payment_validator.rs");
+    const card = await bodyOf("cardPaymentValidator.rs");
     assert.match(card, /pub fn validate_card_payment/);
     assert.match(card, /for item in &obj.tags/);
     assert.match(card, /if let Some\(inner\) = &obj.owner/);
-    const payment = await bodyOf("payment_validator.rs");
+    const payment = await bodyOf("paymentValidator.rs");
     assert.match(payment, /pub fn validate_payment/);
     assert.match(payment, /Payment::CardPayment\(inner\) =>/);
   });

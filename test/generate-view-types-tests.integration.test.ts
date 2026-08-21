@@ -225,32 +225,32 @@ types: []
     assert.deepEqual(
       [...byName.keys()].sort(),
       [
-        "card_payment_tests.rs",
-        "cash_payment_tests.rs",
-        "empty_union_tests.rs",
-        "empty_view_tests.rs",
-        "orphan_tests.rs",
-        "payment_tests.rs",
-        "role_tests.rs",
-        "tag_tests.rs",
-        "tagged_tests.rs",
-        "update_tag_tests.rs",
-        "update_tagged_tests.rs",
-        "update_user_summary_tests.rs",
-        "update_user_tests.rs",
-        "update_wide_tests.rs",
-        "user_summary_tests.rs",
-        "user_tests.rs",
-        "wide_tests.rs",
-        "wraps_empty_tests.rs",
+        "cardPaymentTests.rs",
+        "cashPaymentTests.rs",
+        "emptyUnionTests.rs",
+        "emptyViewTests.rs",
+        "orphanTests.rs",
+        "paymentTests.rs",
+        "roleTests.rs",
+        "tagTests.rs",
+        "taggedTests.rs",
+        "updateTagTests.rs",
+        "updateTaggedTests.rs",
+        "updateUserSummaryTests.rs",
+        "updateUserTests.rs",
+        "updateWideTests.rs",
+        "userSummaryTests.rs",
+        "userTests.rs",
+        "wideTests.rs",
+        "wrapsEmptyTests.rs",
       ],
     );
   });
 
   it("renders primitive, array, nested, and nullable accessor cases", async () => {
-    const card = await bodyOf("card_payment_tests.rs");
+    const card = await bodyOf("cardPaymentTests.rs");
     assert.match(card, /schema-version: 1\.0/);
-    assert.match(card, /use super::card_payment::\*;/);
+    assert.match(card, /use super::cardPayment::\*;/);
     assert.match(card, /fn sample\(\) -> CardPayment \{/);
     assert.match(card, /amount: String::from\("0"\)/);
     assert.match(
@@ -275,7 +275,7 @@ types: []
   });
 
   it("renders a union view with member constructors", async () => {
-    const payment = await bodyOf("payment_tests.rs");
+    const payment = await bodyOf("paymentTests.rs");
     assert.match(payment, /fn accepts_card_payment_member\(/);
     assert.match(payment, /fn accepts_cash_payment_member\(/);
     assert.match(payment, /Payment::CardPayment\(/);
@@ -283,55 +283,55 @@ types: []
   });
 
   it("inlines inherited fields, aliases pass-throughs, and wraps a plain inherit", async () => {
-    const summary = await bodyOf("user_summary_tests.rs");
+    const summary = await bodyOf("userSummaryTests.rs");
     assert.match(summary, /fn gets_display_name\(/);
     assert.match(summary, /fn gets_email\(/);
     assert.doesNotMatch(summary, /fn gets_nick_name\(/);
     assert.doesNotMatch(summary, /fn gets_role_id\(/);
-    const tag = await bodyOf("tag_tests.rs");
+    const tag = await bodyOf("tagTests.rs");
     assert.match(tag, /fn gets_label\(/);
     assert.match(tag, /fn gets_id\(/);
-    const tagged = await bodyOf("tagged_tests.rs");
+    const tagged = await bodyOf("taggedTests.rs");
     assert.match(tagged, /base: crate::types::generated::datasource::Tag \{/);
     assert.match(tagged, /fn gets_extra\(/);
-    const orphan = await bodyOf("orphan_tests.rs");
+    const orphan = await bodyOf("orphanTests.rs");
     assert.match(orphan, /fn gets_label\(/);
     assert.doesNotMatch(orphan, /fn gets_id\(/);
-    const empty = await bodyOf("empty_view_tests.rs");
+    const empty = await bodyOf("emptyViewTests.rs");
     assert.match(empty, /fn sample\(\) -> EmptyView \{\n        EmptyView \{\}\n    \}/);
-    const union = await bodyOf("empty_union_tests.rs");
+    const union = await bodyOf("emptyUnionTests.rs");
     assert.doesNotMatch(union, /fn accepts_/);
-    const wrap = await bodyOf("wraps_empty_tests.rs");
+    const wrap = await bodyOf("wrapsEmptyTests.rs");
     assert.match(wrap, /inner: crate::types::generated::views::EmptyUnion \{\}/);
   });
 
   it("covers unsigned inherited columns and nullable parent fields", async () => {
-    const wide = await bodyOf("wide_tests.rs");
+    const wide = await bodyOf("wideTests.rs");
     assert.match(wide, /u32_val: 1u32/);
     assert.match(wide, /u16_val: 1u16/);
     assert.match(wide, /u64_val: 1u64/);
     assert.match(wide, /i32_val: 1i32/);
     assert.match(wide, /i16_val: 1i16/);
-    const user = await bodyOf("user_tests.rs");
+    const user = await bodyOf("userTests.rs");
     assert.match(user, /nick_name: Some\(String::from\("sample"\)\)/);
     assert.match(user, /fn allows_setting_nick_name_to_none\(/);
   });
 
   it("writes codegen.schema_version into the file header", async () => {
-    const card = await bodyOf("card_payment_tests.rs", {
+    const card = await bodyOf("cardPaymentTests.rs", {
       "codegen.schema_version": "9.9",
     });
     assert.match(card, /schema-version: 9.9/);
   });
 
   it("uses uuid ids when datasource.id_type=uuid", async () => {
-    const user = await bodyOf("user_tests.rs", { "datasource.id_type": "uuid" });
+    const user = await bodyOf("userTests.rs", { "datasource.id_type": "uuid" });
     assert.match(user, /id: String::from\("00000000-0000-0000-0000-000000000000"\)/);
     assert.doesNotMatch(user, /fn gets_uuid\(/);
   });
 
   it("uses i64 ids when datasource.id_type=biginteger", async () => {
-    const user = await bodyOf("user_tests.rs", {
+    const user = await bodyOf("userTests.rs", {
       "datasource.id_type": "biginteger",
     });
     assert.match(user, /id: 1i64,/);

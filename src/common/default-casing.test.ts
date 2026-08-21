@@ -1,17 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createCasing, DEFAULT_CASING } from "./default-casing.ts";
+import { createCasing } from "./default-casing.ts";
 
 const NAME = "notification_type";
 
 describe("createCasing Auto defaults", () => {
   it("matches Default Casings for Rust", () => {
-    assert.deepEqual(DEFAULT_CASING, {
-      file_names: "Camel",
-      types: "Pascal",
-      fields: "Snake",
-      directories: "Camel",
-    });
     const casing = createCasing({});
     assert.equal(casing.convertFileName(NAME), "notificationType");
     assert.equal(casing.convertTypes(NAME), "NotificationType");

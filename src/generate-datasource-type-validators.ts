@@ -1,11 +1,7 @@
-import { snakeCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import {
-  createImportGenerator,
-  type RustImportGenerator,
-} from "./import-generator.ts";
+import type { PackCasing } from "./common/default-casing.ts";
 import {
   DeterministicParser,
   DATASOURCE_TYPES_YAML,
@@ -14,20 +10,8 @@ import {
   type IDeterministic,
 } from "./specification-parser.ts";
 import { convertSpecType } from "./base-type-converter.ts";
-import { isFiniteInt, isFiniteNumber } from "@deterministic-code/generators-common/yaml-entry";
 import { typeTmpl } from "./resources/datasource-type-validators.ts";
-
-type EmitOptions = {
-  imports: RustImportGenerator;
-  schemaVersion: string;
-};
-
-const emitOptions = (settings: Record<string, string>): EmitOptions => ({
-  imports: createImportGenerator(".", settings),
-  schemaVersion: settings["codegen.schema_version"] ?? "1.0",
-});
-
-const fieldName = (field: string): string => field;
+import { Emit } from "./emit.ts";
 
 const errIf = (cond: string, msg: string): string =>
   `if ${cond} { errors.push("${msg}".to_string()); }`;
@@ -56,12 +40,12 @@ const rawChecks = (
     case "character":
       return guard([
         [
-          isFiniteInt(minSize) && minSize! >= 0,
+          minSize !== undefined && minSize >= 0,
           `${ref}.chars().count() < ${minSize}`,
           `${prop}: must be at least ${minSize} chars`,
         ],
         [
-          isFiniteInt(size) && size! >= 0,
+          size !== undefined && size >= 0,
           `${ref}.chars().count() > ${size}`,
           `${prop}: exceeds ${size} chars`,
         ],
@@ -81,12 +65,12 @@ const rawChecks = (
       return guard([
         [idLike, `${ref} < 0${suffix}`, `${prop}: must be nonnegative`],
         [
-          !idLike && isFiniteInt(minSize),
+          !idLike && minSize !== undefined,
           `${ref} < ${minSize}${suffix}`,
           `${prop}: must be at least ${minSize}`,
         ],
         [
-          isFiniteInt(size),
+          size !== undefined,
           `${ref} > ${size}${suffix}`,
           `${prop}: exceeds ${size}`,
         ],
@@ -95,12 +79,12 @@ const rawChecks = (
     case "float":
       return guard([
         [
-          isFiniteNumber(minSize),
+          minSize !== undefined,
           `${ref} < ${floatLit(minSize!)}`,
           `${prop}: must be at least ${minSize}`,
         ],
         [
-          isFiniteNumber(size),
+          size !== undefined,
           `${ref} > ${floatLit(size!)}`,
           `${prop}: exceeds ${size}`,
         ],
@@ -114,10 +98,10 @@ const pad = (n: number, line: string): string => `${"    ".repeat(n)}${line}`;
 
 const checksForField = (
   field: DatasourceField,
-  opts: EmitOptions,
+  casing: PackCasing,
   isStandardId = false,
 ): string[] => {
-  const prop = fieldName(field.name);
+  const prop = casing.convertFields(field.name);
   if (isStandardId) {
     if (field.type === "string") return [];
     if (field.type === "uuid") {
@@ -145,49 +129,37 @@ const checksForField = (
   ];
 };
 
-const validatorPath = (entity: string, imports: RustImportGenerator): string =>
-  imports.datasourceValidator(entity);
+class Generator extends Emit {
+  from(deterministic: IDeterministic): GenerateEntry[] {
+    return deterministic.expandedDatasourceTypes.map((table) =>
+      this.validator(table),
+    );
+  }
 
-const typePath = (entity: string, imports: RustImportGenerator): string =>
-  imports.datasourceQual(entity);
-
-const renderValidator = (
-  table: ExpandedDatasourceType,
-  opts: EmitOptions,
-): GenerateEntry => {
-  const lines = table.fields.flatMap((field) =>
-    checksForField(field, opts, field.name === "id"),
-  );
-  const has = lines.length > 0;
-  return content(
-    validatorPath(table.name, opts.imports),
-    fill(typeTmpl, {
-      schemaVersion: opts.schemaVersion,
-      fnName: `validate_datasource_${snakeCase(table.name)}`,
-      paramName: has ? "obj" : "_obj",
-      typePath: typePath(table.name, opts.imports),
-      declared: has ? "let mut errors" : "let errors",
-      checks: lines.map((line) => ({ line })),
-    }),
-  );
-};
-
-const generateFrom = (
-  deterministic: IDeterministic,
-  settings: Record<string, string>,
-): GenerateEntry[] => {
-  const opts = emitOptions(settings);
-  return deterministic.expandedDatasourceTypes.map((table) =>
-    renderValidator(table, opts),
-  );
-};
+  private validator(table: ExpandedDatasourceType): GenerateEntry {
+    const lines = table.fields.flatMap((field) =>
+      checksForField(field, this.casing, field.name === "id"),
+    );
+    const has = lines.length > 0;
+    return content(
+      this.imports.datasourceValidator(table.name),
+      fill(typeTmpl, {
+        schemaVersion: this.settings.schemaVersion,
+        fnName: this.casing.convertFields(`validate_datasource_${table.name}`),
+        paramName: has ? "obj" : "_obj",
+        typePath: this.imports.datasourceQual(table.name),
+        declared: has ? "let mut errors" : "let errors",
+        checks: lines.map((line) => ({ line })),
+      }),
+    );
+  }
+}
 
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   await ctx.reader.read(DATASOURCE_TYPES_YAML);
-  return generateFrom(
+  return new Generator(ctx.settings).from(
     await DeterministicParser(ctx.reader).parse(ctx.settings),
-    ctx.settings,
   );
 };
