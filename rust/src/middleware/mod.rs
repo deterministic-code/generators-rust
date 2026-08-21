@@ -5,7 +5,6 @@ pub mod cors_middleware;
 pub mod data_source_console_logger_middleware;
 pub mod error_handler;
 pub mod error_handler_middleware;
-pub mod extract_sql_method;
 pub mod form_body_middleware;
 pub mod json_body_middleware;
 pub mod large_json_body_middleware;
@@ -27,7 +26,6 @@ pub use error_handler::{ApiErrorEntry, AppError, ErrorHandler};
 pub use error_handler_middleware::{
     envelope_error_layer, EnvelopePanicResponder, ErrorHandlerMiddleware,
 };
-pub use extract_sql_method::extract_sql_method;
 pub use form_body_middleware::{FormBodyMiddleware, FORM_BODY_LIMIT_BYTES};
 pub use json_body_middleware::{JsonBodyMiddleware, JSON_BODY_LIMIT_BYTES};
 pub use large_json_body_middleware::{LargeJsonBodyMiddleware, LARGE_JSON_BODY_LIMIT_BYTES};

@@ -16,8 +16,13 @@ fn email_sample_dir() -> PathBuf {
 // health answers, and close() drains the connection and frees the port.
 #[tokio::test(flavor = "multi_thread")]
 async fn start_serves_over_tcp_and_close_drains_and_frees_the_port() {
+    let deterministic_dir = email_sample_dir();
+    if !deterministic_dir.is_dir() {
+        eprintln!("skipping: sample dir {:?} not found", deterministic_dir);
+        return;
+    }
     let config = RunConfig {
-        deterministic_dir: email_sample_dir(),
+        deterministic_dir,
         database_url: "sqlite::memory:".to_string(),
         port: 0,
         custom_services: deterministic::CustomServices::new(),
