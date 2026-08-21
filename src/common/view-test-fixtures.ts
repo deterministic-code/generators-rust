@@ -23,6 +23,9 @@ export type FieldTok = {
   sampleExpr: string;
   nextExpr: string;
   nullable: boolean;
+  getsTest: string;
+  setsTest: string;
+  allowsNoneTest: string;
 };
 
 export const renderDs = (name: string, opts: ViewTestOpts): string => {
@@ -66,6 +69,11 @@ const viewFieldTok = (
     sampleExpr: wrapValue(pair.sample, field),
     nextExpr: wrapValue(pair.next, field),
     nullable: field.isNullable,
+    getsTest: opts.casing.fnIdent(`gets_${field.name}`),
+    setsTest: opts.casing.fnIdent(`sets_${field.name}`),
+    allowsNoneTest: opts.casing.fnIdent(
+      `allows_setting_${field.name}_to_none`,
+    ),
   };
 };
 
@@ -85,7 +93,15 @@ export const shapedToks = (
   ) {
     const base = renderDs(view.inherits, opts);
     return [
-      { ident: "base", sampleExpr: base, nextExpr: base, nullable: false },
+      {
+        ident: "base",
+        sampleExpr: base,
+        nextExpr: base,
+        nullable: false,
+        getsTest: opts.casing.fnIdent("gets_base"),
+        setsTest: opts.casing.fnIdent("sets_base"),
+        allowsNoneTest: opts.casing.fnIdent("allows_setting_base_to_none"),
+      },
       ...fields,
     ];
   }

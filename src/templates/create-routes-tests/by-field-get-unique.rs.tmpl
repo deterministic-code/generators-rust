@@ -1,6 +1,6 @@
 
     #[tokio::test]
-    async fn get_{{entitySnake}}_by_{{byField}}_missing_returns_404() {
+    async fn {{byFieldMissingTest}}() {
         let res = setup()
             .oneshot(
                 Request::builder()

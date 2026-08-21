@@ -32,6 +32,7 @@ const byFieldsBlock = (
   entitySnake: string,
   mountPath: string,
   byFields: RouteByField[],
+  fnIdent: (stem: string) => string,
 ): string =>
   getByFields(byFields)
     .map((entry) =>
@@ -40,6 +41,12 @@ const byFieldsBlock = (
         mountPath,
         byField: entry.byField,
         kebab: entry.byField.replace(/_/g, "-"),
+        byFieldMissingTest: fnIdent(
+          `get_${entitySnake}_by_${entry.byField}_missing_returns_404`,
+        ),
+        byFieldListTest: fnIdent(
+          `get_${entitySnake}_by_${entry.byField}_returns_items`,
+        ),
       }),
     )
     .join("");
@@ -79,7 +86,28 @@ class Generator extends Emit {
           ?.type ?? "integer",
       ),
       occ,
-      byFieldsBlock: byFieldsBlock(candidate.name, mountPath, candidate.byFields),
+      getListTest: this.casing.fnIdent(
+        `get_${candidate.name}_list_returns_200`,
+      ),
+      getMissingTest: this.casing.fnIdent(
+        `get_${candidate.name}_missing_returns_404`,
+      ),
+      postTest: this.casing.fnIdent(`post_${candidate.name}_returns_201`),
+      putMissingTest: this.casing.fnIdent(
+        `put_${candidate.name}_missing_is_not_5xx`,
+      ),
+      patchMissingTest: this.casing.fnIdent(
+        `patch_${candidate.name}_missing_is_not_5xx`,
+      ),
+      deleteMissingTest: this.casing.fnIdent(
+        `delete_${candidate.name}_missing_is_not_5xx`,
+      ),
+      byFieldsBlock: byFieldsBlock(
+        candidate.name,
+        mountPath,
+        candidate.byFields,
+        (stem) => this.casing.fnIdent(stem),
+      ),
     };
     if (candidate.datasourceType === "readonly-lookup") {
       return content(path, fill(readonlyTmpl, shared));

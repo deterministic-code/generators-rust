@@ -13,6 +13,10 @@ describe("createCasing Auto defaults", () => {
     assert.equal(casing.convertDirectories(NAME), "notificationType");
     assert.equal(casing.filePath(NAME), "notificationType.rs");
     assert.equal(casing.serviceClassName("user"), "UserService");
+    assert.equal(
+      casing.fnIdent("validate_create_user"),
+      "validate_create_user",
+    );
   });
 });
 

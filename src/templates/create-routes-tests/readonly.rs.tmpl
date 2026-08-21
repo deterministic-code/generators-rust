@@ -15,7 +15,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_{{entitySnake}}_list_returns_200() {
+    async fn {{getListTest}}() {
         let res = setup()
             .oneshot(
                 Request::builder()
@@ -30,7 +30,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_{{entitySnake}}_missing_returns_404() {
+    async fn {{getMissingTest}}() {
         let res = setup()
             .oneshot(
                 Request::builder()

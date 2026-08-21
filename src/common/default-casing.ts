@@ -17,6 +17,7 @@ export type PackCasing = ICasingStrategy & {
   directory: (entity: string) => string
   filePath: (stem: string) => string
   serviceClassName: (entity: string) => string
+  fnIdent: (stem: string) => string
 };
 
 /** Language defaults + settings overrides. Layout (by-feature) lives on ImportGenerator. */
@@ -37,6 +38,7 @@ export const createCasing = (
     directory,
     filePath,
     serviceClassName: (entity: string) => casing.convertTypes(`${entity}_service`),
+    fnIdent: (stem: string) => casing.convertFields(stem),
   };
 };
 

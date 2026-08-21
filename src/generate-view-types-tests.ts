@@ -62,6 +62,9 @@ class Generator extends Emit implements ViewTestOpts {
           view.kind === "union"
             ? view.members.map((name) => ({
                 ident: this.casing.convertFields(name),
+                acceptsMemberTest: this.casing.fnIdent(
+                  `accepts_${name}_member`,
+                ),
                 memberExpr: `${cls}::${this.casing.convertTypes(name)}(${viewExpr(name, this, new Set([view.name]))})`,
               }))
             : [],

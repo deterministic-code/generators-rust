@@ -41,9 +41,11 @@ class Generator extends Emit {
             fileBase: this.casing.fileBase(`${c.name}_service`),
             entity: c.name,
             withUuid,
-            stampColsIdent: withUuid
-              ? "id_uuid_created_updated"
-              : "id_created_updated",
+            addPopulatesTest: this.casing.fnIdent(
+              withUuid
+                ? "add_inserts_a_row_and_auto_populates_id_uuid_created_updated"
+                : "add_inserts_a_row_and_auto_populates_id_created_updated",
+            ),
             missingId: missingIdExpr(pkType),
           }),
         );

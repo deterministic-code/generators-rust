@@ -23,6 +23,11 @@ class Generator extends Emit {
           sampleExpr: wrapOption(sample, field.isNullable),
           nextExpr: wrapOption(next, field.isNullable),
           nullable: field.isNullable,
+          getsTest: this.casing.fnIdent(`gets_${field.name}`),
+          setsTest: this.casing.fnIdent(`sets_${field.name}`),
+          allowsNoneTest: this.casing.fnIdent(
+            `allows_setting_${field.name}_to_none`,
+          ),
         };
       });
       const src = this.imports.datasource(table.name);
