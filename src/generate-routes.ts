@@ -405,9 +405,15 @@ class Generator extends Emit {
     const coerceFn = hasCoercion
       ? `\n\n${generateCoerceRowFn(booleanFields, binaryFields)}`
       : "";
+    const createValidatorName = this.casing.fnIdent(
+      `validate_create_${entitySnake}`,
+    );
+    const updateValidatorName = this.casing.fnIdent(
+      `validate_update_${entitySnake}`,
+    );
     const { createValidator, updateValidator } = buildCrudValidators(
-      this.casing.convertFields(`validate_create_${entitySnake}`),
-      this.casing.convertFields(`validate_update_${entitySnake}`),
+      createValidatorName,
+      updateValidatorName,
       applyEnrichmentToRequiredFields([], enrichments),
       directFkChildren,
     );
@@ -426,6 +432,8 @@ class Generator extends Emit {
         : "None",
       hasCoercion,
       hasByFields,
+      createValidatorName,
+      updateValidatorName,
       createValidator,
       updateValidator,
       coerceFn,

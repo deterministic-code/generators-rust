@@ -57,6 +57,11 @@ class Generator extends Emit {
         fill(setupTmpl, {
           entity: t.name,
           segment: this.imports.apiPath(t.name),
+          setupFn: this.casing.fnIdent(`setup_${t.name}_router`),
+          listRouteName: this.casing.fnIdent(`list_${t.name}`),
+          getByIdRouteName: this.casing.fnIdent(`get_${t.name}_by_id`),
+          createRouteName: this.casing.fnIdent(`create_${t.name}`),
+          deleteByIdRouteName: this.casing.fnIdent(`delete_${t.name}_by_id`),
         }).trimEnd(),
       )
       .join("\n\n");
@@ -66,6 +71,15 @@ class Generator extends Emit {
           entity: t.name,
           pascal: this.casing.convertTypes(t.name),
           segment: this.imports.apiPath(t.name),
+          setupFn: this.casing.fnIdent(`setup_${t.name}_router`),
+          listTest: this.casing.fnIdent(`${t.name}_list_returns_200`),
+          postTest: this.casing.fnIdent(`${t.name}_post_accepts_sample_payload`),
+          getMissingTest: this.casing.fnIdent(
+            `${t.name}_get_missing_returns_404`,
+          ),
+          deleteMissingTest: this.casing.fnIdent(
+            `${t.name}_delete_missing_returns_non_5xx`,
+          ),
           missing:
             (
               t.fields.find((f) => f.name === t.primaryKeyColumn)?.type ??

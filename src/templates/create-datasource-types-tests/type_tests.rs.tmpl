@@ -13,7 +13,7 @@ mod tests {
 
 {{#fields}}
     #[test]
-    fn gets_{{ident}}() {
+    fn {{getsTest}}() {
         let initial = {{&sampleExpr}};
         let mut value = sample();
         value.{{ident}} = initial.clone();
@@ -21,7 +21,7 @@ mod tests {
     }
 
     #[test]
-    fn sets_{{ident}}() {
+    fn {{setsTest}}() {
         let mut value = sample();
         let next = {{&nextExpr}};
         value.{{ident}} = next.clone();
@@ -29,7 +29,7 @@ mod tests {
     }
 {{#nullable}}
     #[test]
-    fn allows_setting_{{ident}}_to_none() {
+    fn {{allowsNoneTest}}() {
         let mut value = sample();
         value.{{ident}} = None;
         assert!(value.{{ident}}.is_none());

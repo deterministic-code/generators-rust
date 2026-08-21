@@ -1,6 +1,6 @@
 
     #[tokio::test]
-    async fn get_{{entitySnake}}_by_{{byField}}_returns_items() {
+    async fn {{byFieldListTest}}() {
         let res = setup()
             .oneshot(
                 Request::builder()

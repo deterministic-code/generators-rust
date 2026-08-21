@@ -1,6 +1,6 @@
 #[tokio::test]
-async fn {{entity}}_list_returns_200() {
-    let router = setup_{{entity}}_router();
+async fn {{listTest}}() {
+    let router = {{setupFn}}();
     let req = HttpRequest::builder()
         .method("GET")
         .uri("/api/{{segment}}")
@@ -16,8 +16,8 @@ async fn {{entity}}_list_returns_200() {
 }
 
 #[tokio::test]
-async fn {{entity}}_post_accepts_sample_payload() {
-    let router = setup_{{entity}}_router();
+async fn {{postTest}}() {
+    let router = {{setupFn}}();
     let req = HttpRequest::builder()
         .method("POST")
         .uri("/api/{{segment}}")
@@ -33,8 +33,8 @@ async fn {{entity}}_post_accepts_sample_payload() {
 }
 
 #[tokio::test]
-async fn {{entity}}_get_missing_returns_404() {
-    let router = setup_{{entity}}_router();
+async fn {{getMissingTest}}() {
+    let router = {{setupFn}}();
     let req = HttpRequest::builder()
         .method("GET")
         .uri("/api/{{segment}}/{{missing}}")
@@ -50,8 +50,8 @@ async fn {{entity}}_get_missing_returns_404() {
 }
 
 #[tokio::test]
-async fn {{entity}}_delete_missing_returns_non_5xx() {
-    let router = setup_{{entity}}_router();
+async fn {{deleteMissingTest}}() {
+    let router = {{setupFn}}();
     let req = HttpRequest::builder()
         .method("DELETE")
         .uri("/api/{{segment}}/{{missing}}")

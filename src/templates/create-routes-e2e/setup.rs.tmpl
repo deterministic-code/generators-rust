@@ -1,4 +1,4 @@
-fn setup_{{entity}}_router() -> axum::Router {
+fn {{setupFn}}() -> axum::Router {
     let svc: std::sync::Arc<dyn DynamicService> = std::sync::Arc::new(
         GenericCrudService::new(std::sync::Arc::new(InMemoryCrudRepository::new())),
     );
@@ -7,7 +7,7 @@ fn setup_{{entity}}_router() -> axum::Router {
         .build();
     let specs = vec![
         GenericRouteSpec {
-            route_name: "list_{{entity}}".to_string(),
+            route_name: "{{listRouteName}}".to_string(),
             path: "/api/{{segment}}".to_string(),
             method: HttpMethod::Get,
             service: "{{entity}}".to_string(),
@@ -17,7 +17,7 @@ fn setup_{{entity}}_router() -> axum::Router {
             aliases: vec![],
         },
         GenericRouteSpec {
-            route_name: "get_{{entity}}_by_id".to_string(),
+            route_name: "{{getByIdRouteName}}".to_string(),
             path: "/api/{{segment}}/:id".to_string(),
             method: HttpMethod::Get,
             service: "{{entity}}".to_string(),
@@ -27,7 +27,7 @@ fn setup_{{entity}}_router() -> axum::Router {
             aliases: vec![],
         },
         GenericRouteSpec {
-            route_name: "create_{{entity}}".to_string(),
+            route_name: "{{createRouteName}}".to_string(),
             path: "/api/{{segment}}".to_string(),
             method: HttpMethod::Post,
             service: "{{entity}}".to_string(),
@@ -37,7 +37,7 @@ fn setup_{{entity}}_router() -> axum::Router {
             aliases: vec![],
         },
         GenericRouteSpec {
-            route_name: "delete_{{entity}}_by_id".to_string(),
+            route_name: "{{deleteByIdRouteName}}".to_string(),
             path: "/api/{{segment}}/:id".to_string(),
             method: HttpMethod::Delete,
             service: "{{entity}}".to_string(),

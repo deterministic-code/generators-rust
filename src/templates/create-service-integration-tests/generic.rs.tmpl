@@ -32,7 +32,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn add_inserts_a_row_and_auto_populates_{{stampColsIdent}}() {
+    async fn {{addPopulatesTest}}() {
         let svc = service().await;
         let row = CrudService::add(&svc, RowMap::new()).await.unwrap();
         assert!(row.get("id").is_some());
