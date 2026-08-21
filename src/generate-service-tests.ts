@@ -1,16 +1,13 @@
+import { pascalCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { servicePaths, type ServicePaths } from "./common/paths.ts";
+import { createImportGenerator } from "./import-generator.ts";
 import { DeterministicParser, SERVICES_YAML, type IDeterministic } from "./specification-parser.ts";
 import { genericTmpl } from "./resources/service-tests.ts";
 
-const testPath = (entity: string, naming: ServicePaths): string => {
-  const file = `${naming.fileBase(entity)}_tests.rs`;
-  if (!naming.byFeature) return file;
-  const typeFile = naming.filePath(entity);
-  return `${typeFile.slice(0, typeFile.lastIndexOf("/"))}/__tests__/${file}`;
-};
+const serviceClassName = (entity: string): string =>
+  pascalCase(`${entity}_service`);
 
 const missingIdExpr = (idType: string): string =>
   idType === "uuid"
@@ -21,16 +18,16 @@ const generateFrom = (
   deterministic: IDeterministic,
   settings: Record<string, string>,
 ): GenerateEntry[] => {
-  const naming = servicePaths(settings);
+  const imports = createImportGenerator(".", settings);
   return deterministic.services.generics.map((c) => {
     const table = deterministic.expandedDatasourceTypes.find(
       (t) => t.name === c.name,
     );
     return content(
-      testPath(c.name, naming),
+      imports.serviceTest(c.name),
       fill(genericTmpl, {
-        structName: naming.serviceClassName(c.name),
-        fileBase: naming.fileBase(c.name),
+        structName: serviceClassName(c.name),
+        fileBase: `${c.name}_service`,
         missingId: missingIdExpr(
           table?.fields.find((f) => f.name === (table.primaryKeyColumn ?? "id"))
             ?.type ?? "integer",
@@ -44,10 +41,9 @@ export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   await ctx.reader.read(SERVICES_YAML);
-  const naming = servicePaths(ctx.settings);
   return generateFrom(
     await DeterministicParser(ctx.reader).parse(ctx.settings, {
-      serviceClassName: naming.serviceClassName,
+      serviceClassName,
     }),
     ctx.settings,
   );

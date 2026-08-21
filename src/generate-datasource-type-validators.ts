@@ -2,7 +2,10 @@ import { snakeCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { datasourcePaths, type ArtifactPaths } from "./common/paths.ts";
+import {
+  createImportGenerator,
+  type RustImportGenerator,
+} from "./import-generator.ts";
 import {
   DeterministicParser,
   DATASOURCE_TYPES_YAML,
@@ -15,14 +18,16 @@ import { isFiniteInt, isFiniteNumber } from "@deterministic-code/generators-comm
 import { typeTmpl } from "./resources/datasource-type-validators.ts";
 
 type EmitOptions = {
-  naming: ArtifactPaths;
+  imports: RustImportGenerator;
   schemaVersion: string;
 };
 
 const emitOptions = (settings: Record<string, string>): EmitOptions => ({
-  naming: datasourcePaths(settings),
+  imports: createImportGenerator(".", settings),
   schemaVersion: settings["codegen.schema_version"] ?? "1.0",
 });
+
+const fieldName = (field: string): string => field;
 
 const errIf = (cond: string, msg: string): string =>
   `if ${cond} { errors.push("${msg}".to_string()); }`;
@@ -112,7 +117,7 @@ const checksForField = (
   opts: EmitOptions,
   isStandardId = false,
 ): string[] => {
-  const prop = opts.naming.fieldName(field.name);
+  const prop = fieldName(field.name);
   if (isStandardId) {
     if (field.type === "string") return [];
     if (field.type === "uuid") {
@@ -140,21 +145,11 @@ const checksForField = (
   ];
 };
 
-const validatorPath = (entity: string, naming: ArtifactPaths): string =>
-  naming.byFeature
-    ? naming.filePath(entity).replace(/\.rs$/, "_validator.rs")
-    : `datasource_${naming.fileBase(entity)}_validator.rs`;
+const validatorPath = (entity: string, imports: RustImportGenerator): string =>
+  imports.datasourceValidator(entity);
 
-const typePath = (entity: string, naming: ArtifactPaths): string => {
-  const cls = naming.className(entity);
-  if (!naming.byFeature) return `crate::types::generated::datasource::${cls}`;
-  const module = naming
-    .filePath(entity)
-    .replace(/\.rs$/, "")
-    .replace(/^features\//, "")
-    .replaceAll("/", "::");
-  return `crate::features::${module}::${cls}`;
-};
+const typePath = (entity: string, imports: RustImportGenerator): string =>
+  imports.datasourceQual(entity);
 
 const renderValidator = (
   table: ExpandedDatasourceType,
@@ -165,12 +160,12 @@ const renderValidator = (
   );
   const has = lines.length > 0;
   return content(
-    validatorPath(table.name, opts.naming),
+    validatorPath(table.name, opts.imports),
     fill(typeTmpl, {
       schemaVersion: opts.schemaVersion,
       fnName: `validate_datasource_${snakeCase(table.name)}`,
       paramName: has ? "obj" : "_obj",
-      typePath: typePath(table.name, opts.naming),
+      typePath: typePath(table.name, opts.imports),
       declared: has ? "let mut errors" : "let errors",
       checks: lines.map((line) => ({ line })),
     }),

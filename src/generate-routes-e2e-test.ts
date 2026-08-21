@@ -1,7 +1,8 @@
+import { pascalCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { datasourcePaths, routePaths } from "./common/paths.ts";
+import { createImportGenerator } from "./import-generator.ts";
 import {
   DeterministicParser,
   DATASOURCE_TYPES_YAML,
@@ -14,6 +15,8 @@ import {
   readonlyTestsTmpl,
   setupTmpl,
 } from "./resources/routes-e2e.ts";
+
+const className = (entity: string): string => pascalCase(entity);
 
 const jsonSample = (type: string): string => {
   switch (type) {
@@ -51,8 +54,7 @@ const generateFrom = (
   deterministic: IDeterministic,
   settings: Record<string, string>,
 ): GenerateEntry[] => {
-  const naming = routePaths(settings);
-  const names = datasourcePaths(settings);
+  const imports = createImportGenerator(".", settings);
   const tables = deterministic.expandedDatasourceTypes.filter(
     (t) => t.datasourceType !== "many-to-many",
   );
@@ -60,7 +62,7 @@ const generateFrom = (
     .map((t) =>
       fill(setupTmpl, {
         entity: t.name,
-        segment: naming.apiPath(t.name),
+        segment: imports.apiPath(t.name),
       }).trimEnd(),
     )
     .join("\n\n");
@@ -68,8 +70,8 @@ const generateFrom = (
     .map((t) => {
       const tokens = {
         entity: t.name,
-        pascal: names.className(t.name),
-        segment: naming.apiPath(t.name),
+        pascal: className(t.name),
+        segment: imports.apiPath(t.name),
         missing:
           (
             t.fields.find((f) => f.name === t.primaryKeyColumn)?.type ??

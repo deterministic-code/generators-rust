@@ -1,8 +1,11 @@
-import { snakeCase } from "change-case";
+import { pascalCase, snakeCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { datasourcePaths, type ArtifactPaths } from "./common/paths.ts";
+import {
+  createImportGenerator,
+  type RustImportGenerator,
+} from "./import-generator.ts";
 import {
   rustString,
   samplesForNative,
@@ -19,7 +22,7 @@ import { convertSpecType } from "./base-type-converter.ts";
 import { typeTestTmpl } from "./resources/datasource-type-validators-tests.ts";
 
 type EmitOptions = {
-  naming: ArtifactPaths;
+  imports: RustImportGenerator;
   schemaVersion: string;
 };
 
@@ -38,20 +41,22 @@ type CaseTok = {
   assertion: string;
 };
 
+const className = (entity: string): string => pascalCase(entity);
+const fieldName = (field: string): string => field;
+
 const emitOptions = (settings: Record<string, string>): EmitOptions => ({
-  naming: datasourcePaths(settings),
+  imports: createImportGenerator(".", settings),
   schemaVersion: settings["codegen.schema_version"] ?? "1.0",
 });
 
 const fieldTok = (
   field: DatasourceField | { name: string; type: string; isNullable: boolean },
-  opts: EmitOptions,
 ): FieldTok => {
   const native = convertSpecType(field.type);
   const { sample } = samplesForNative(native, field.type);
   return {
     name: field.name,
-    ident: opts.naming.fieldName(field.name),
+    ident: fieldName(field.name),
     sampleExpr: wrapOption(sample, field.isNullable),
     isNullable: field.isNullable,
     type: field.type,
@@ -65,21 +70,8 @@ const structLiteral = (
 ): string =>
   `${cls} { ${fields.map((f) => `${f.ident}: ${f.expr}`).join(", ")} }`;
 
-const typeUse = (entity: string, naming: ArtifactPaths): string => {
-  const cls = naming.className(entity);
-  if (naming.byFeature) {
-    const stem = naming.filePath(entity).replace(/\.rs$/, "");
-    return `crate::${stem.split("/").join("::")}::${cls}`;
-  }
-  return `crate::types::generated::datasource::${cls}`;
-};
-
-const testPath = (entity: string, naming: ArtifactPaths): string => {
-  const file = `${naming.fileBase(entity)}_tests.rs`;
-  if (!naming.byFeature) return file;
-  const typeFile = naming.filePath(entity);
-  return `${typeFile.slice(0, typeFile.lastIndexOf("/"))}/__tests__/${file}`;
-};
+const typeUse = (entity: string, imports: RustImportGenerator): string =>
+  imports.datasourceQual(entity);
 
 const casesFor = (cls: string, fields: FieldTok[]): CaseTok[] => {
   const valid = structLiteral(
@@ -127,13 +119,14 @@ const renderTests = (
   table: DatasourceType,
   opts: EmitOptions,
 ): GenerateEntry => {
-  const fields = table.fields.map((f) => fieldTok(f, opts));
-  const cls = opts.naming.className(table.name);
+  const fields = table.fields.map((f) => fieldTok(f));
+  const cls = className(table.name);
+  const src = opts.imports.datasource(table.name);
   return content(
-    testPath(table.name, opts.naming),
+    opts.imports.test(src, table.name),
     fill(typeTestTmpl, {
       schemaVersion: opts.schemaVersion,
-      typeUse: typeUse(table.name, opts.naming),
+      typeUse: typeUse(table.name, opts.imports),
       fnName: `validate_datasource_${snakeCase(table.name)}`,
       cases: casesFor(cls, fields),
     }),

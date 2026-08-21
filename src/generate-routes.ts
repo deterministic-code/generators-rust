@@ -1,11 +1,12 @@
 import pluralize from "pluralize";
+import { pascalCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
-  routePaths,
-  type RoutePaths,
-} from "./common/paths.ts";
+  createImportGenerator,
+  type RustImportGenerator,
+} from "./import-generator.ts";
 import { convertSpecType } from "./base-type-converter.ts";
 import {
   DeterministicParser,
@@ -69,7 +70,7 @@ type NormalizedByField = {
 };
 
 type EmitOptions = {
-  naming: RoutePaths;
+  imports: RustImportGenerator;
   useOptimisticConcurrency: boolean;
   views: ViewType[];
   datasources: ExpandedDatasourceType[];
@@ -83,7 +84,7 @@ const emitOptions = async (
   datasources: ExpandedDatasourceType[],
 ): Promise<EmitOptions> => {
   return {
-    naming: routePaths(settings),
+    imports: createImportGenerator(".", settings),
     useOptimisticConcurrency:
       settings["datasource.use_optimistic_concurrency"] !== "false",
     views,
@@ -91,6 +92,9 @@ const emitOptions = async (
     nested,
   };
 };
+
+const serviceClassName = (entity: string): string =>
+  pascalCase(`${entity}_service`);
 
 const pluralSnakeField = (entity: string): string => {
   const parts = entity.split(/[_-]/);
@@ -357,16 +361,16 @@ const renderReadOnly = (
   candidate: RouteCandidate,
   opts: EmitOptions,
 ): GenerateEntry => {
-  const { naming } = opts;
+  const { imports } = opts;
   const entitySnake = candidate.name;
-  const className = naming.serviceClassName(entitySnake);
-  const path = `/api/${naming.apiPath(entitySnake)}`;
+  const className = serviceClassName(entitySnake);
+  const path = `/api/${imports.apiPath(entitySnake)}`;
   const pk = inferPrimaryKey(
     opts.datasources.find((d) => d.name === entitySnake),
   );
   const normalizedByFields = normalizeByFields(candidate.byFields);
   const tokens = {
-    serviceImport: naming.serviceUseLine(entitySnake, className),
+    serviceImport: imports.serviceUse(entitySnake, className),
     className,
     entitySnake,
     path,
@@ -374,22 +378,22 @@ const renderReadOnly = (
     hasByFields: normalizedByFields.length > 0,
     byFieldMerges: byFieldMergeChain(
       entitySnake,
-      naming.apiPath(entitySnake),
+      imports.apiPath(entitySnake),
       normalizedByFields,
       false,
     ),
   };
-  return content(naming.filePath(entitySnake), fill(readonlyTmpl, tokens));
+  return content(imports.route(entitySnake), fill(readonlyTmpl, tokens));
 };
 
 const renderCrud = (
   candidate: RouteCandidate,
   opts: EmitOptions,
 ): GenerateEntry => {
-  const { naming } = opts;
+  const { imports } = opts;
   const entitySnake = candidate.name;
-  const className = naming.serviceClassName(entitySnake);
-  const path = `/api/${naming.apiPath(entitySnake)}`;
+  const className = serviceClassName(entitySnake);
+  const path = `/api/${imports.apiPath(entitySnake)}`;
   const allFields = fieldsForEntity(entitySnake, opts.datasources);
   const enrichments = enrichmentsForEntity(entitySnake, opts.views);
   const eagerWriteChildren = eagerWriteChildrenForEntity(
@@ -420,7 +424,7 @@ const renderCrud = (
     opts.useOptimisticConcurrency,
   );
   const tokens = {
-    serviceImport: naming.serviceUseLine(entitySnake, className),
+    serviceImport: imports.serviceUse(entitySnake, className),
     className,
     entitySnake,
     path,
@@ -438,12 +442,12 @@ const renderCrud = (
     coerceFn,
     byFieldMerges: byFieldMergeChain(
       entitySnake,
-      naming.apiPath(entitySnake),
+      imports.apiPath(entitySnake),
       normalizedByFields,
       hasCoercion,
     ),
   };
-  return content(naming.filePath(entitySnake), fill(crudTmpl, tokens));
+  return content(imports.route(entitySnake), fill(crudTmpl, tokens));
 };
 
 const renderEntityRouter = (
@@ -458,17 +462,17 @@ const renderAppWiring = (
   candidates: RouteCandidate[],
   opts: EmitOptions,
 ): GenerateEntry => {
-  const { naming } = opts;
+  const { imports } = opts;
   const services = candidates.map((c) => ({
     fieldName: serviceFieldName(c.name),
-    className: naming.serviceClassName(c.name),
-    routeModule: naming.routeModulePath(c.name),
+    className: serviceClassName(c.name),
+    routeModule: imports.spec("", imports.routeRel(c.name)),
   }));
   return content(
-    naming.appWiringFilePath(),
+    imports.appWiring(),
     fill(appWiringTmpl, {
       imports: candidates.map((c) =>
-        naming.serviceUseLine(c.name, naming.serviceClassName(c.name)),
+        imports.serviceUse(c.name, serviceClassName(c.name)),
       ),
       body: fill(appWiringBodyTmpl, {
         hasServices: services.length > 0,

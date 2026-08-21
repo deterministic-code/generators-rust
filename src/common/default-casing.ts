@@ -19,14 +19,13 @@ const featureEntity = (entity: string): string => {
 };
 
 export type PackCasing = ICasingStrategy & {
-  byFeature: boolean
   fileBase: (stem: string) => string
   directory: (entity: string) => string
   filePath: (stem: string) => string
   serviceClassName: (entity: string) => string
 };
 
-/** Language defaults + settings overrides. Generators call this — not paths.ts. */
+/** Language defaults + settings overrides. Layout (by-feature) lives on ImportGenerator. */
 export const createCasing = (
   settings: Record<string, string>,
 ): PackCasing => {
@@ -34,20 +33,15 @@ export const createCasing = (
     GENERATOR_LANGUAGE,
     casingOverridesFromSettings(settings, GENERATOR_LANGUAGE),
   );
-  const byFeature = settings["other.organize_by_feature"] === "true";
   const fileBase = (stem: string): string => casing.convertFileName(stem);
   const directory = (entity: string): string =>
     casing.convertDirectories(featureEntity(entity));
-  const filePath = (stem: string): string => {
-    const file = `${fileBase(stem)}.rs`;
-    return byFeature ? `features/${directory(stem)}/${file}` : file;
-  };
+  const filePath = (stem: string): string => `${fileBase(stem)}.rs`;
   return {
     convertFileName: (text: string) => casing.convertFileName(text),
     convertTypes: (text: string) => casing.convertTypes(text),
     convertFields: (text: string) => casing.convertFields(text),
     convertDirectories: (text: string) => casing.convertDirectories(text),
-    byFeature,
     fileBase,
     directory,
     filePath,

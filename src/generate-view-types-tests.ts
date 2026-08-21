@@ -1,9 +1,10 @@
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { viewPaths } from "./common/paths.ts";
+import { createImportGenerator } from "./import-generator.ts";
 import {
-  qual,
+  className,
+  fieldName,
   shapedToks,
   viewExpr,
   type ViewTestOpts,
@@ -16,20 +17,13 @@ import {
 } from "./specification-parser.ts";
 import { typeTestTmpl } from "./resources/view-types-tests.ts";
 
-const testPath = (entity: string, naming: ViewTestOpts["naming"]): string => {
-  const file = `${naming.fileBase(entity)}_tests.rs`;
-  if (!naming.byFeature) return file;
-  const typeFile = naming.filePath(entity);
-  return `${typeFile.slice(0, typeFile.lastIndexOf("/"))}/__tests__/${file}`;
-};
-
 const generateFrom = (
   deterministic: IDeterministic,
   settings: Record<string, string>,
 ): GenerateEntry[] => {
-  const naming = viewPaths(settings);
+  const imports = createImportGenerator(".", settings);
   const opts: ViewTestOpts = {
-    naming,
+    imports,
     tables: new Map(
       deterministic.expandedDatasourceTypes.map((t) => [t.name, t]),
     ),
@@ -44,19 +38,20 @@ const generateFrom = (
       view.kind === "shaped"
         ? shapedToks(view, opts, new Set([view.name]))
         : [];
-    const cls = naming.className(view.name);
+    const cls = className(view.name);
     const fixture =
       view.kind !== "shaped"
         ? ""
         : fields.length === 0
           ? `${cls} {}`
           : `${cls} {\n${fields.map((f) => `            ${f.ident}: ${f.sampleExpr},`).join("\n")}\n        }`;
+    const src = imports.view(view.name);
     return content(
-      testPath(view.name, naming),
+      imports.test(src, view.name),
       fill(typeTestTmpl, {
         schemaVersion,
         structName: cls,
-        fileBase: naming.fileBase(view.name),
+        fileBase: view.name,
         isShaped: view.kind === "shaped",
         isUnion: view.kind === "union",
         fixture,
@@ -64,8 +59,8 @@ const generateFrom = (
         members:
           view.kind === "union"
             ? view.members.map((name) => ({
-                ident: naming.fieldName(name),
-                memberExpr: `${cls}::${naming.className(name)}(${viewExpr(name, opts, new Set([view.name]))})`,
+                ident: fieldName(name),
+                memberExpr: `${cls}::${className(name)}(${viewExpr(name, opts, new Set([view.name]))})`,
               }))
             : [],
       }),

@@ -1,8 +1,11 @@
-import { snakeCase } from "change-case";
+import { pascalCase, snakeCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { viewPaths, type ArtifactPaths } from "./common/paths.ts";
+import {
+  createImportGenerator,
+  type RustImportGenerator,
+} from "./import-generator.ts";
 import { emitViewFields, inlinesParent, isAlias } from "./common/view-shape.ts";
 import {
   DeterministicParser,
@@ -21,65 +24,44 @@ import {
 } from "./resources/view-type-validators.ts";
 
 type EmitOptions = {
-  naming: ArtifactPaths;
+  imports: RustImportGenerator;
   schemaVersion: string;
 };
 
 const emitOptions = (settings: Record<string, string>): EmitOptions => ({
-  naming: viewPaths(settings),
+  imports: createImportGenerator(".", settings),
   schemaVersion: settings["codegen.schema_version"] ?? "1.0",
 });
+
+const className = (entity: string): string => pascalCase(entity);
+const fieldName = (field: string): string => field;
 
 const typePath = (
   entity: string,
   kind: "datasource" | "view",
-  naming: ArtifactPaths,
-): string => {
-  const cls = naming.className(entity);
-  if (naming.byFeature) {
-    const module = naming
-      .filePath(entity)
-      .replace(/\.rs$/, "")
-      .replace(/^features\//, "")
-      .replaceAll("/", "::");
-    return `crate::features::${module}::${cls}`;
-  }
-  const ns =
-    kind === "datasource"
-      ? "crate::types::generated::datasource"
-      : "crate::types::generated::views";
-  return `${ns}::${cls}`;
-};
+  imports: RustImportGenerator,
+): string =>
+  kind === "datasource"
+    ? imports.datasourceQual(entity)
+    : imports.viewQual(entity);
 
 const validatorFn = (
   entity: string,
   kind: "datasource" | "view",
-  naming: ArtifactPaths,
+  imports: RustImportGenerator,
 ): string => {
   const fn =
     kind === "datasource"
       ? `validate_datasource_${snakeCase(entity)}`
       : `validate_${snakeCase(entity)}`;
-  if (naming.byFeature) {
-    const dir = naming
-      .filePath(entity)
-      .replace(/\/[^/]+$/, "")
-      .replace(/^features\//, "")
-      .replaceAll("/", "::");
-    return `crate::features::${dir}::${naming.fileBase(entity)}_validator::${fn}`;
-  }
-  const ns =
-    kind === "datasource"
-      ? "crate::types::generated::datasource::validators"
-      : "crate::types::generated::views::validators";
-  return `${ns}::${fn}`;
+  return imports.validatorFn(kind, entity, fn);
 };
 
 const checkField = (field: ViewField, opts: EmitOptions): string => {
-  const prop = opts.naming.fieldName(field.name);
+  const prop = fieldName(field.name);
   const access = `obj.${prop}`;
   if (field.kind === "primitive") return "";
-  const fn = validatorFn(field.base, field.kind, opts.naming);
+  const fn = validatorFn(field.base, field.kind, opts.imports);
   if (field.isArray) {
     const tmpl = field.isNullable ? checkArrayNullableTmpl : checkArrayTmpl;
     return fill(tmpl, { access, fn }).trimEnd();
@@ -90,10 +72,8 @@ const checkField = (field: ViewField, opts: EmitOptions): string => {
   return fill(checkRequiredTmpl, { fn, arg: `&${access}` }).trimEnd();
 };
 
-const validatorPath = (entity: string, naming: ArtifactPaths): string =>
-  naming.byFeature
-    ? naming.filePath(entity).replace(/\.rs$/, "_validator.rs")
-    : `${naming.fileBase(entity)}_validator.rs`;
+const validatorPath = (entity: string, imports: RustImportGenerator): string =>
+  imports.viewValidator(entity);
 
 const shapedBody = (
   view: ShapedView,
@@ -102,7 +82,7 @@ const shapedBody = (
 ) => {
   const checks: string[] = [];
   if (view.inherits !== null && !inlinesParent(view)) {
-    const fn = validatorFn(view.inherits, "datasource", opts.naming);
+    const fn = validatorFn(view.inherits, "datasource", opts.imports);
     const arg = isAlias(view) ? "obj" : "&obj.base";
     checks.push(
       fill(checkRequiredTmpl, { fn, arg }).trimEnd(),
@@ -122,9 +102,9 @@ const renderView = (
   opts: EmitOptions,
 ): GenerateEntry => {
   const fnName = `validate_${snakeCase(view.name)}`;
-  const path = validatorPath(view.name, opts.naming);
+  const path = validatorPath(view.name, opts.imports);
   if (view.kind === "union") {
-    const cls = typePath(view.name, "view", opts.naming);
+    const cls = typePath(view.name, "view", opts.imports);
     return content(
       path,
       fill(typeTmpl, {
@@ -134,7 +114,7 @@ const renderView = (
         fnName,
         typePath: cls,
         arms: view.members.map((m) => ({
-          arm: `${cls}::${opts.naming.className(m)}(inner) => ${validatorFn(m, "view", opts.naming)}(inner),`,
+          arm: `${cls}::${className(m)}(inner) => ${validatorFn(m, "view", opts.imports)}(inner),`,
         })),
         paramName: "obj",
         hasChecks: false,
@@ -150,7 +130,7 @@ const renderView = (
       isUnion: false,
       isShaped: true,
       fnName,
-      typePath: typePath(view.name, "view", opts.naming),
+      typePath: typePath(view.name, "view", opts.imports),
       paramName: checks.length > 0 ? "obj" : "_obj",
       hasChecks: checks.length > 0,
       checks: checks.map((line) => ({ line })),

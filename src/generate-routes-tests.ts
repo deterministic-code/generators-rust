@@ -1,7 +1,11 @@
+import { pascalCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { routePaths, type RoutePaths } from "./common/paths.ts";
+import {
+  createImportGenerator,
+  type RustImportGenerator,
+} from "./import-generator.ts";
 import {
   DeterministicParser,
   ROUTES_YAML,
@@ -19,17 +23,13 @@ import {
 } from "./resources/routes-tests.ts";
 
 type EmitOptions = {
-  naming: RoutePaths;
+  imports: RustImportGenerator;
   useOcc: boolean;
   datasources: ExpandedDatasourceType[];
 };
 
-const testPath = (entity: string, naming: RoutePaths): string => {
-  const file = `${naming.fileBase(entity)}_tests.rs`;
-  if (!naming.byFeature) return file;
-  const typeFile = naming.filePath(entity);
-  return `${typeFile.slice(0, typeFile.lastIndexOf("/"))}/__tests__/${file}`;
-};
+const serviceClassName = (entity: string): string =>
+  pascalCase(`${entity}_service`);
 
 const missingIdExpr = (idType: string): string =>
   idType === "uuid"
@@ -63,16 +63,17 @@ const renderTest = (
   opts: EmitOptions,
 ): GenerateEntry => {
   const table = opts.datasources.find((d) => d.name === candidate.name);
-  const path = testPath(candidate.name, opts.naming);
-  const mountPath = `/api/${opts.naming.apiPath(candidate.name)}`;
+  const path = opts.imports.routeTest(candidate.name);
+  const mountPath = `/api/${opts.imports.apiPath(candidate.name)}`;
   const occ = entityUsesOptimisticConcurrency(candidate, opts.useOcc);
+  const fileBase = opts.imports.routeModule(candidate.name);
   const shared = {
-    fileBase: opts.naming.fileBase(candidate.name),
-    serviceImport: opts.naming.serviceUseLine(
+    fileBase,
+    serviceImport: opts.imports.serviceUse(
       candidate.name,
-      opts.naming.serviceClassName(candidate.name),
+      serviceClassName(candidate.name),
     ),
-    className: opts.naming.serviceClassName(candidate.name),
+    className: serviceClassName(candidate.name),
     entitySnake: candidate.name,
     mountPath,
     missingId: missingIdExpr(
@@ -94,7 +95,7 @@ const generateFrom = (
 ): GenerateEntry[] => {
   const parsed = deterministic.routes;
   const opts: EmitOptions = {
-    naming: routePaths(settings),
+    imports: createImportGenerator(".", settings),
     useOcc: settings["datasource.use_optimistic_concurrency"] !== "false",
     datasources: deterministic.expandedDatasourceTypes,
   };

@@ -3,6 +3,10 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { createCasing, type PackCasing } from "./common/default-casing.ts";
 import {
+  createImportGenerator,
+  type RustImportGenerator,
+} from "./import-generator.ts";
+import {
   DeterministicParser,
   DATASOURCE_TYPES_YAML,
   type DatasourceType,
@@ -20,6 +24,7 @@ const docTokens = (settings: Record<string, string>) => {
 };
 
 type EmitOptions = {
+  imports: RustImportGenerator;
   casing: PackCasing;
   schemaVersion: string;
   simpleDoc: boolean;
@@ -27,6 +32,7 @@ type EmitOptions = {
 };
 
 const emitOptions = (settings: Record<string, string>): EmitOptions => ({
+  imports: createImportGenerator(".", settings),
   casing: createCasing(settings),
   schemaVersion: settings["codegen.schema_version"] ?? "1.0",
   ...docTokens(settings),
@@ -48,7 +54,7 @@ const renderType = (
   const fields = table.fields;
   const structName = casing.convertTypes(table.name);
   return content(
-    casing.filePath(table.name),
+    opts.imports.datasource(table.name),
     fill(typeTmpl, {
       schemaVersion,
       simpleDoc,

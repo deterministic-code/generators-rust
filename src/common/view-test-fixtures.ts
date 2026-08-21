@@ -1,7 +1,8 @@
-import type { ArtifactPaths } from "./paths.ts";
+import { pascalCase } from "change-case";
 import { inlinesParent, isAlias } from "./view-shape.ts";
 import { sampleForField, samplesForNative } from "./test-samples.ts";
 import { convertSpecType } from "../base-type-converter.ts";
+import type { RustImportGenerator } from "../import-generator.ts";
 import type {
   DatasourceType,
   ShapedView,
@@ -10,7 +11,7 @@ import type {
 } from "../specification-parser.ts";
 
 export type ViewTestOpts = {
-  naming: ArtifactPaths;
+  imports: RustImportGenerator;
   tables: Map<string, DatasourceType>;
   views: Map<string, ViewType>;
   expandedViews: Map<string, ViewType>;
@@ -23,29 +24,15 @@ export type FieldTok = {
   nullable: boolean;
 };
 
-export const qual = (
-  entity: string,
-  kind: "datasource" | "view",
-  naming: ArtifactPaths,
-): string => {
-  const cls = naming.className(entity);
-  if (naming.byFeature) {
-    const stem = naming.filePath(entity).replace(/\.rs$/, "");
-    return `crate::${stem.split("/").join("::")}::${cls}`;
-  }
-  const ns =
-    kind === "datasource"
-      ? "crate::types::generated::datasource"
-      : "crate::types::generated::views";
-  return `${ns}::${cls}`;
-};
+export const className = (entity: string): string => pascalCase(entity);
+export const fieldName = (field: string): string => field;
 
 export const renderDs = (name: string, opts: ViewTestOpts): string => {
   const table = opts.tables.get(name);
-  const cls = qual(name, "datasource", opts.naming);
+  const cls = opts.imports.datasourceQual(name);
   if (table === undefined) return `${cls} {}`;
   const body = table.fields
-    .map((f) => `${opts.naming.fieldName(f.name)}: ${sampleForField(f.type, f.isNullable)}`)
+    .map((f) => `${fieldName(f.name)}: ${sampleForField(f.type, f.isNullable)}`)
     .join(", ");
   return `${cls} { ${body} }`;
 };
@@ -74,7 +61,7 @@ const viewFieldTok = (
     pair = { sample: expr, next: expr };
   }
   return {
-    ident: opts.naming.fieldName(field.name),
+    ident: fieldName(field.name),
     sampleExpr: wrapValue(pair.sample, field),
     nextExpr: wrapValue(pair.next, field),
     nullable: field.isNullable,
@@ -119,10 +106,10 @@ export const viewExpr = (
   const next = new Set(visited).add(name);
   if (view.kind === "union") {
     const member = view.members[0];
-    if (member === undefined) return `${qual(name, "view", opts.naming)} {}`;
-    return `${qual(name, "view", opts.naming)}::${opts.naming.className(member)}(${viewExpr(member, opts, next)})`;
+    if (member === undefined) return `${opts.imports.viewQual(name)} {}`;
+    return `${opts.imports.viewQual(name)}::${className(member)}(${viewExpr(member, opts, next)})`;
   }
-  const cls = qual(name, "view", opts.naming);
+  const cls = opts.imports.viewQual(name);
   const fields = shapedToks(view, opts, next);
   return `${cls} { ${fields.map((f) => `${f.ident}: ${f.sampleExpr}`).join(", ")} }`;
 };
