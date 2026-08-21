@@ -55,10 +55,10 @@ describe("generate-service-tests", () => {
       settings: {},
     });
     const paths = entries.map((e) => e.filename).sort();
-    assert.deepEqual(paths, ["role_service_tests.rs", "user_service_tests.rs"]);
+    assert.deepEqual(paths, ["roleServiceTests.rs", "userServiceTests.rs"]);
 
-    const user = textOf(entries, "user_service_tests.rs");
-    assert.match(user, /use super::user_service::\*;/);
+    const user = textOf(entries, "userServiceTests.rs");
+    assert.match(user, /use super::userService::\*;/);
     assert.match(user, /fn service\(\) -> UserService/);
     assert.match(user, /UserService::from_inner/);
     assert.match(user, /InMemoryCrudRepository::new/);
@@ -84,7 +84,7 @@ describe("generate-service-tests", () => {
       reader: memoryReader(yaml),
       settings: { "datasource.id_type": "uuid" },
     });
-    const user = textOf(entries, "user_service_tests.rs");
+    const user = textOf(entries, "userServiceTests.rs");
     assert.match(
       user,
       /json!\("00000000-0000-0000-0000-000000000000"\)/,
@@ -99,8 +99,8 @@ describe("generate-service-tests", () => {
     });
     const paths = entries.map((e) => e.filename).sort();
     assert.deepEqual(paths, [
-      "features/role/__tests__/role_service_tests.rs",
-      "features/user/__tests__/user_service_tests.rs",
+      "features/role/__tests__/roleServiceTests.rs",
+      "features/user/__tests__/userServiceTests.rs",
     ]);
   });
 

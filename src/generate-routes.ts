@@ -1,17 +1,11 @@
 import pluralize from "pluralize";
-import { pascalCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import {
-  createImportGenerator,
-  type RustImportGenerator,
-} from "./import-generator.ts";
 import { convertSpecType } from "./base-type-converter.ts";
 import {
   DeterministicParser,
   ROUTES_YAML,
-  entityUsesOptimisticConcurrency,
   type DatasourceField,
   type ExpandedDatasourceType,
   type NestedRouteDescriptor,
@@ -35,7 +29,7 @@ import {
   validatorEmptyTmpl,
   validatorTmpl,
 } from "./resources/routes.ts";
-import { serviceFieldName } from "./rust-eager-service-graph.ts";
+import { Emit } from "./emit.ts";
 
 type Field = {
   name: string;
@@ -68,33 +62,6 @@ type NormalizedByField = {
   byField: string;
   unique: boolean;
 };
-
-type EmitOptions = {
-  imports: RustImportGenerator;
-  useOptimisticConcurrency: boolean;
-  views: ViewType[];
-  datasources: ExpandedDatasourceType[];
-  nested: NestedRouteDescriptor[];
-};
-
-const emitOptions = async (
-  settings: Record<string, string>,
-  views: ViewType[],
-  nested: NestedRouteDescriptor[],
-  datasources: ExpandedDatasourceType[],
-): Promise<EmitOptions> => {
-  return {
-    imports: createImportGenerator(".", settings),
-    useOptimisticConcurrency:
-      settings["datasource.use_optimistic_concurrency"] !== "false",
-    views,
-    datasources,
-    nested,
-  };
-};
-
-const serviceClassName = (entity: string): string =>
-  pascalCase(`${entity}_service`);
 
 const pluralSnakeField = (entity: string): string => {
   const parts = entity.split(/[_-]/);
@@ -339,175 +306,171 @@ const fieldsForEntity = (
 };
 
 const buildCrudValidators = (
-  entitySnake: string,
+  createFnName: string,
+  updateFnName: string,
   effectiveRequiredFields: Field[],
   children: EagerChild[],
 ): { createValidator: string; updateValidator: string } => ({
   createValidator: buildValidatorFn({
-    fnName: `validate_create_${entitySnake}`,
+    fnName: createFnName,
     requiredFields: effectiveRequiredFields,
     requireAll: true,
     directFkChildren: children,
   }),
   updateValidator: buildValidatorFn({
-    fnName: `validate_update_${entitySnake}`,
+    fnName: updateFnName,
     requiredFields: effectiveRequiredFields,
     requireAll: false,
     directFkChildren: children,
   }),
 });
 
-const renderReadOnly = (
-  candidate: RouteCandidate,
-  opts: EmitOptions,
-): GenerateEntry => {
-  const { imports } = opts;
-  const entitySnake = candidate.name;
-  const className = serviceClassName(entitySnake);
-  const path = `/api/${imports.apiPath(entitySnake)}`;
-  const pk = inferPrimaryKey(
-    opts.datasources.find((d) => d.name === entitySnake),
-  );
-  const normalizedByFields = normalizeByFields(candidate.byFields);
-  const tokens = {
-    serviceImport: imports.serviceUse(entitySnake, className),
-    className,
-    entitySnake,
-    path,
-    idTypeVariant: idTypeVariantForPk(pk),
-    hasByFields: normalizedByFields.length > 0,
-    byFieldMerges: byFieldMergeChain(
-      entitySnake,
-      imports.apiPath(entitySnake),
-      normalizedByFields,
-      false,
-    ),
-  };
-  return content(imports.route(entitySnake), fill(readonlyTmpl, tokens));
-};
+class Generator extends Emit {
+  private readonly views: ViewType[];
+  private readonly datasources: ExpandedDatasourceType[];
+  private readonly nested: NestedRouteDescriptor[];
 
-const renderCrud = (
-  candidate: RouteCandidate,
-  opts: EmitOptions,
-): GenerateEntry => {
-  const { imports } = opts;
-  const entitySnake = candidate.name;
-  const className = serviceClassName(entitySnake);
-  const path = `/api/${imports.apiPath(entitySnake)}`;
-  const allFields = fieldsForEntity(entitySnake, opts.datasources);
-  const enrichments = enrichmentsForEntity(entitySnake, opts.views);
-  const eagerWriteChildren = eagerWriteChildrenForEntity(
-    entitySnake,
-    opts.nested,
-  );
-  const pk = inferPrimaryKey(
-    opts.datasources.find((d) => d.name === entitySnake),
-  );
-  const normalizedByFields = normalizeByFields(candidate.byFields);
-  const hasByFields = normalizedByFields.length > 0;
-  const directFkChildren = sortedDirectFkChildren(eagerWriteChildren);
-  const { booleanFields, binaryFields } = partitionFieldsByType(allFields);
-  const hasCoercion = booleanFields.length + binaryFields.length > 0;
-  const coerceFn = hasCoercion
-    ? `\n\n${generateCoerceRowFn(booleanFields, binaryFields)}`
-    : "";
-  const { createValidator, updateValidator } = buildCrudValidators(
-    entitySnake,
-    applyEnrichmentToRequiredFields([], enrichments),
-    directFkChildren,
-  );
-  const occ = entityUsesOptimisticConcurrency(
-    {
-      datasourceType: candidate.datasourceType,
-      optimisticConcurrency: candidate.optimisticConcurrency,
-    },
-    opts.useOptimisticConcurrency,
-  );
-  const tokens = {
-    serviceImport: imports.serviceUse(entitySnake, className),
-    className,
-    entitySnake,
-    path,
-    idTypeVariant: idTypeVariantForPk(pk),
-    primaryKeyParamExpr:
-      pk.column === "id" ? "None" : `Some("${pk.column}".to_string())`,
-    useOptimisticConcurrency: occ ? "true" : "false",
-    coerceRowExpr: hasCoercion
-      ? "Some(Arc::new(|row: &mut RowMap| coerce_row_types(row)))"
-      : "None",
-    hasCoercion,
-    hasByFields,
-    createValidator,
-    updateValidator,
-    coerceFn,
-    byFieldMerges: byFieldMergeChain(
-      entitySnake,
-      imports.apiPath(entitySnake),
-      normalizedByFields,
-      hasCoercion,
-    ),
-  };
-  return content(imports.route(entitySnake), fill(crudTmpl, tokens));
-};
-
-const renderEntityRouter = (
-  candidate: RouteCandidate,
-  opts: EmitOptions,
-): GenerateEntry =>
-  candidate.datasourceType === "readonly-lookup"
-    ? renderReadOnly(candidate, opts)
-    : renderCrud(candidate, opts);
-
-const renderAppWiring = (
-  candidates: RouteCandidate[],
-  opts: EmitOptions,
-): GenerateEntry => {
-  const { imports } = opts;
-  const services = candidates.map((c) => ({
-    fieldName: serviceFieldName(c.name),
-    className: serviceClassName(c.name),
-    routeModule: imports.spec("", imports.routeRel(c.name)),
-  }));
-  return content(
-    imports.appWiring(),
-    fill(appWiringTmpl, {
-      imports: candidates.map((c) =>
-        imports.serviceUse(c.name, serviceClassName(c.name)),
-      ),
-      body: fill(appWiringBodyTmpl, {
-        hasServices: services.length > 0,
-        services,
-      }).trimEnd(),
-    }),
-  );
-};
-
-const generateFrom = async (
-  deterministic: IDeterministic,
-  settings: Record<string, string>,
-): Promise<GenerateEntry[]> => {
-  const parsed = deterministic.routes;
-  const opts = await emitOptions(
-    settings,
-    deterministic.viewTypes,
-    parsed.nested,
-    deterministic.expandedDatasourceTypes,
-  );
-  const entries: GenerateEntry[] = parsed.candidates.map((c) =>
-    renderEntityRouter(c, opts),
-  );
-  if (parsed.candidates.length > 0) {
-    entries.push(renderAppWiring(parsed.candidates, opts));
+  constructor(
+    raw: Record<string, string>,
+    views: ViewType[],
+    datasources: ExpandedDatasourceType[],
+    nested: NestedRouteDescriptor[],
+  ) {
+    super(raw);
+    this.views = views;
+    this.datasources = datasources;
+    this.nested = nested;
   }
-  return entries;
-};
+
+  from(deterministic: IDeterministic): GenerateEntry[] {
+    const parsed = deterministic.routes;
+    const entries: GenerateEntry[] = parsed.candidates.map((c) =>
+      this.entityRouter(c),
+    );
+    if (parsed.candidates.length > 0) {
+      entries.push(this.appWiring(parsed.candidates));
+    }
+    return entries;
+  }
+
+  private entityRouter(candidate: RouteCandidate): GenerateEntry {
+    return candidate.datasourceType === "readonly-lookup"
+      ? this.readOnly(candidate)
+      : this.crud(candidate);
+  }
+
+  private readOnly(candidate: RouteCandidate): GenerateEntry {
+    const entitySnake = candidate.name;
+    const className = this.casing.serviceClassName(entitySnake);
+    const path = `/api/${this.imports.apiPath(entitySnake)}`;
+    const pk = inferPrimaryKey(
+      this.datasources.find((d) => d.name === entitySnake),
+    );
+    const normalizedByFields = normalizeByFields(candidate.byFields);
+    const tokens = {
+      serviceImport: this.imports.serviceUse(entitySnake, className),
+      className,
+      entitySnake,
+      path,
+      idTypeVariant: idTypeVariantForPk(pk),
+      hasByFields: normalizedByFields.length > 0,
+      byFieldMerges: byFieldMergeChain(
+        entitySnake,
+        this.imports.apiPath(entitySnake),
+        normalizedByFields,
+        false,
+      ),
+    };
+    return content(this.imports.route(entitySnake), fill(readonlyTmpl, tokens));
+  }
+
+  private crud(candidate: RouteCandidate): GenerateEntry {
+    const entitySnake = candidate.name;
+    const className = this.casing.serviceClassName(entitySnake);
+    const path = `/api/${this.imports.apiPath(entitySnake)}`;
+    const allFields = fieldsForEntity(entitySnake, this.datasources);
+    const enrichments = enrichmentsForEntity(entitySnake, this.views);
+    const eagerWriteChildren = eagerWriteChildrenForEntity(
+      entitySnake,
+      this.nested,
+    );
+    const pk = inferPrimaryKey(
+      this.datasources.find((d) => d.name === entitySnake),
+    );
+    const normalizedByFields = normalizeByFields(candidate.byFields);
+    const hasByFields = normalizedByFields.length > 0;
+    const directFkChildren = sortedDirectFkChildren(eagerWriteChildren);
+    const { booleanFields, binaryFields } = partitionFieldsByType(allFields);
+    const hasCoercion = booleanFields.length + binaryFields.length > 0;
+    const coerceFn = hasCoercion
+      ? `\n\n${generateCoerceRowFn(booleanFields, binaryFields)}`
+      : "";
+    const { createValidator, updateValidator } = buildCrudValidators(
+      this.casing.convertFields(`validate_create_${entitySnake}`),
+      this.casing.convertFields(`validate_update_${entitySnake}`),
+      applyEnrichmentToRequiredFields([], enrichments),
+      directFkChildren,
+    );
+    const occ = this.settings.usesOptimisticConcurrency(candidate);
+    const tokens = {
+      serviceImport: this.imports.serviceUse(entitySnake, className),
+      className,
+      entitySnake,
+      path,
+      idTypeVariant: idTypeVariantForPk(pk),
+      primaryKeyParamExpr:
+        pk.column === "id" ? "None" : `Some("${pk.column}".to_string())`,
+      useOptimisticConcurrency: occ ? "true" : "false",
+      coerceRowExpr: hasCoercion
+        ? "Some(Arc::new(|row: &mut RowMap| coerce_row_types(row)))"
+        : "None",
+      hasCoercion,
+      hasByFields,
+      createValidator,
+      updateValidator,
+      coerceFn,
+      byFieldMerges: byFieldMergeChain(
+        entitySnake,
+        this.imports.apiPath(entitySnake),
+        normalizedByFields,
+        hasCoercion,
+      ),
+    };
+    return content(this.imports.route(entitySnake), fill(crudTmpl, tokens));
+  }
+
+  private appWiring(candidates: RouteCandidate[]): GenerateEntry {
+    const services = candidates.map((c) => ({
+      fieldName: this.casing.convertFields(`${c.name}_service`),
+      className: this.casing.serviceClassName(c.name),
+      routeModule: this.imports.spec("", this.imports.routeRel(c.name)),
+    }));
+    return content(
+      this.imports.appWiring(),
+      fill(appWiringTmpl, {
+        imports: candidates.map((c) =>
+          this.imports.serviceUse(c.name, this.casing.serviceClassName(c.name)),
+        ),
+        body: fill(appWiringBodyTmpl, {
+          hasServices: services.length > 0,
+          services,
+        }).trimEnd(),
+      }),
+    );
+  }
+}
 
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   await ctx.reader.read(ROUTES_YAML);
-  return generateFrom(
-    await DeterministicParser(ctx.reader).parse(ctx.settings),
+  const deterministic = await DeterministicParser(ctx.reader).parse(
     ctx.settings,
   );
+  return new Generator(
+    ctx.settings,
+    deterministic.viewTypes,
+    deterministic.expandedDatasourceTypes,
+    deterministic.routes.nested,
+  ).from(deterministic);
 };

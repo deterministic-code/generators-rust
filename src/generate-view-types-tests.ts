@@ -1,10 +1,7 @@
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { createImportGenerator } from "./import-generator.ts";
 import {
-  className,
-  fieldName,
   shapedToks,
   viewExpr,
   type ViewTestOpts,
@@ -16,42 +13,47 @@ import {
   type ViewType,
 } from "./specification-parser.ts";
 import { typeTestTmpl } from "./resources/view-types-tests.ts";
+import { Emit } from "./emit.ts";
 
-const generateFrom = (
-  deterministic: IDeterministic,
-  settings: Record<string, string>,
-): GenerateEntry[] => {
-  const imports = createImportGenerator(".", settings);
-  const opts: ViewTestOpts = {
-    imports,
-    tables: new Map(
+class Generator extends Emit implements ViewTestOpts {
+  readonly tables: ViewTestOpts["tables"];
+  readonly views: ViewTestOpts["views"];
+  readonly expandedViews: ViewTestOpts["expandedViews"];
+
+  constructor(raw: Record<string, string>, deterministic: IDeterministic) {
+    super(raw);
+    this.tables = new Map(
       deterministic.expandedDatasourceTypes.map((t) => [t.name, t]),
-    ),
-    views: new Map(deterministic.viewTypes.map((v) => [v.name, v])),
-    expandedViews: new Map(
+    );
+    this.views = new Map(deterministic.viewTypes.map((v) => [v.name, v]));
+    this.expandedViews = new Map(
       deterministic.expandedViewTypes.map((v) => [v.name, v]),
-    ),
-  };
-  const schemaVersion = settings["codegen.schema_version"] ?? "1.0";
-  return deterministic.viewTypes.map((view: ViewType) => {
+    );
+  }
+
+  from(): GenerateEntry[] {
+    return [...this.views.values()].map((view) => this.tests(view));
+  }
+
+  private tests(view: ViewType): GenerateEntry {
     const fields =
       view.kind === "shaped"
-        ? shapedToks(view, opts, new Set([view.name]))
+        ? shapedToks(view, this, new Set([view.name]))
         : [];
-    const cls = className(view.name);
+    const cls = this.casing.convertTypes(view.name);
     const fixture =
       view.kind !== "shaped"
         ? ""
         : fields.length === 0
           ? `${cls} {}`
           : `${cls} {\n${fields.map((f) => `            ${f.ident}: ${f.sampleExpr},`).join("\n")}\n        }`;
-    const src = imports.view(view.name);
+    const src = this.imports.view(view.name);
     return content(
-      imports.test(src, view.name),
+      this.imports.test(src, view.name),
       fill(typeTestTmpl, {
-        schemaVersion,
+        schemaVersion: this.settings.schemaVersion,
         structName: cls,
-        fileBase: view.name,
+        fileBase: this.casing.fileBase(view.name),
         isShaped: view.kind === "shaped",
         isUnion: view.kind === "union",
         fixture,
@@ -59,21 +61,21 @@ const generateFrom = (
         members:
           view.kind === "union"
             ? view.members.map((name) => ({
-                ident: fieldName(name),
-                memberExpr: `${cls}::${className(name)}(${viewExpr(name, opts, new Set([view.name]))})`,
+                ident: this.casing.convertFields(name),
+                memberExpr: `${cls}::${this.casing.convertTypes(name)}(${viewExpr(name, this, new Set([view.name]))})`,
               }))
             : [],
       }),
     );
-  });
-};
+  }
+}
 
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   await ctx.reader.read(VIEW_TYPES_YAML);
-  return generateFrom(
-    await DeterministicParser(ctx.reader).parse(ctx.settings),
+  return new Generator(
     ctx.settings,
-  );
+    await DeterministicParser(ctx.reader).parse(ctx.settings),
+  ).from();
 };

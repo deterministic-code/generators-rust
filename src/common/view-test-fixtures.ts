@@ -1,7 +1,7 @@
-import { pascalCase } from "change-case";
 import { inlinesParent, isAlias } from "./view-shape.ts";
 import { sampleForField, samplesForNative } from "./test-samples.ts";
 import { convertSpecType } from "../base-type-converter.ts";
+import type { PackCasing } from "./default-casing.ts";
 import type { RustImportGenerator } from "../import-generator.ts";
 import type {
   DatasourceType,
@@ -11,6 +11,7 @@ import type {
 } from "../specification-parser.ts";
 
 export type ViewTestOpts = {
+  casing: PackCasing;
   imports: RustImportGenerator;
   tables: Map<string, DatasourceType>;
   views: Map<string, ViewType>;
@@ -24,15 +25,15 @@ export type FieldTok = {
   nullable: boolean;
 };
 
-export const className = (entity: string): string => pascalCase(entity);
-export const fieldName = (field: string): string => field;
-
 export const renderDs = (name: string, opts: ViewTestOpts): string => {
   const table = opts.tables.get(name);
   const cls = opts.imports.datasourceQual(name);
   if (table === undefined) return `${cls} {}`;
   const body = table.fields
-    .map((f) => `${fieldName(f.name)}: ${sampleForField(f.type, f.isNullable)}`)
+    .map(
+      (f) =>
+        `${opts.casing.convertFields(f.name)}: ${sampleForField(f.type, f.isNullable)}`,
+    )
     .join(", ");
   return `${cls} { ${body} }`;
 };
@@ -61,7 +62,7 @@ const viewFieldTok = (
     pair = { sample: expr, next: expr };
   }
   return {
-    ident: fieldName(field.name),
+    ident: opts.casing.convertFields(field.name),
     sampleExpr: wrapValue(pair.sample, field),
     nextExpr: wrapValue(pair.next, field),
     nullable: field.isNullable,
@@ -107,7 +108,7 @@ export const viewExpr = (
   if (view.kind === "union") {
     const member = view.members[0];
     if (member === undefined) return `${opts.imports.viewQual(name)} {}`;
-    return `${opts.imports.viewQual(name)}::${className(member)}(${viewExpr(member, opts, next)})`;
+    return `${opts.imports.viewQual(name)}::${opts.casing.convertTypes(member)}(${viewExpr(member, opts, next)})`;
   }
   const cls = opts.imports.viewQual(name);
   const fields = shapedToks(view, opts, next);

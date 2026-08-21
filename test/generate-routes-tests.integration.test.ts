@@ -76,17 +76,17 @@ describe("generate-routes-tests", () => {
     });
     const paths = entries.map((e) => e.filename).sort();
     assert.deepEqual(paths, [
-      "orders_tests.rs",
-      "roles_tests.rs",
-      "skus_tests.rs",
-      "users_tests.rs",
+      "ordersTests.rs",
+      "rolesTests.rs",
+      "skusTests.rs",
+      "usersTests.rs",
     ]);
 
-    const users = textOf(entries, "users_tests.rs");
+    const users = textOf(entries, "usersTests.rs");
     assert.match(users, /use super::users::router;/);
     assert.match(
       users,
-      /use crate::services::generated::user_service::UserService;/,
+      /use crate::services::generated::userService::UserService;/,
     );
     assert.match(users, /fn post_user_returns_201/);
     assert.match(users, /uri\("\/api\/users\/99999"\)/);
@@ -97,12 +97,12 @@ describe("generate-routes-tests", () => {
     assert.match(users, /header\("if-match", "2020-01-01T00:00:00.000Z"\)/);
     assert.doesNotMatch(users, /get_user_by_slug/);
 
-    const roles = textOf(entries, "roles_tests.rs");
+    const roles = textOf(entries, "rolesTests.rs");
     assert.match(roles, /fn get_role_list_returns_200/);
     assert.match(roles, /uri\("\/api\/roles"\)/);
     assert.doesNotMatch(roles, /post_role_returns_201/);
 
-    const orders = textOf(entries, "orders_tests.rs");
+    const orders = textOf(entries, "ordersTests.rs");
     assert.match(orders, /header\("if-match", "2020-01-01T00:00:00.000Z"\)/);
     assert.match(orders, /fn put_order_missing_is_not_5xx/);
     assert.match(orders, /fn patch_order_missing_is_not_5xx/);
@@ -132,7 +132,7 @@ routes: []
       }),
       settings: { "datasource.use_optimistic_concurrency": "true" },
     });
-    const users = textOf(entries, "users_tests.rs");
+    const users = textOf(entries, "usersTests.rs");
     assert.match(users, /header\("if-match", "2020-01-01T00:00:00.000Z"\)/);
   });
 
@@ -141,7 +141,7 @@ routes: []
       reader: memoryReader(yaml),
       settings: { "datasource.id_type": "uuid" },
     });
-    const users = textOf(entries, "users_tests.rs");
+    const users = textOf(entries, "usersTests.rs");
     assert.match(
       users,
       /uri\("\/api\/users\/00000000-0000-0000-0000-000000000000"\)/,
@@ -162,11 +162,11 @@ routes: []
     });
     assert.deepEqual(
       entries.map((e) => e.filename),
-      ["features/user/__tests__/users_router_tests.rs"],
+      ["features/user/__tests__/usersRouterTests.rs"],
     );
-    const users = textOf(entries, "features/user/__tests__/users_router_tests.rs");
-    assert.match(users, /use super::users_router::router;/);
-    assert.match(users, /use crate::features::user::user_service::UserService;/);
+    const users = textOf(entries, "features/user/__tests__/usersRouterTests.rs");
+    assert.match(users, /use super::usersRouter::router;/);
+    assert.match(users, /use crate::features::user::userService::UserService;/);
   });
 
   it("rejects when routes.yaml is missing", async () => {

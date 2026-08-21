@@ -1,8 +1,6 @@
-import { pascalCase } from "change-case";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { createImportGenerator } from "./import-generator.ts";
 import {
   DeterministicParser,
   DATASOURCE_TYPES_YAML,
@@ -15,8 +13,7 @@ import {
   readonlyTestsTmpl,
   setupTmpl,
 } from "./resources/routes-e2e.ts";
-
-const className = (entity: string): string => pascalCase(entity);
+import { Emit } from "./emit.ts";
 
 const jsonSample = (type: string): string => {
   switch (type) {
@@ -50,59 +47,56 @@ const samplePayload = (table: ExpandedDatasourceType): string => {
   return `{${parts.join(",")}}`;
 };
 
-const generateFrom = (
-  deterministic: IDeterministic,
-  settings: Record<string, string>,
-): GenerateEntry[] => {
-  const imports = createImportGenerator(".", settings);
-  const tables = deterministic.expandedDatasourceTypes.filter(
-    (t) => t.datasourceType !== "many-to-many",
-  );
-  const setups = tables
-    .map((t) =>
-      fill(setupTmpl, {
-        entity: t.name,
-        segment: imports.apiPath(t.name),
-      }).trimEnd(),
-    )
-    .join("\n\n");
-  const tests = tables
-    .map((t) => {
-      const tokens = {
-        entity: t.name,
-        pascal: className(t.name),
-        segment: imports.apiPath(t.name),
-        missing:
-          (
-            t.fields.find((f) => f.name === t.primaryKeyColumn)?.type ??
-            "integer"
-          ) === "uuid"
-            ? "00000000-0000-0000-0000-000000000000"
-            : "99999",
-        payload: samplePayload(t),
-      };
-      const tmpl =
-        t.datasourceType === "readonly-lookup"
-          ? readonlyTestsTmpl
-          : crudTestsTmpl;
-      return fill(tmpl, tokens).trimEnd();
-    })
-    .join("\n\n");
-  return [
-    content(
-      "app_routes_e2e.rs",
-      fill(fileTmpl, { setups, tests }),
-    ),
-  ];
-};
+class Generator extends Emit {
+  from(deterministic: IDeterministic): GenerateEntry[] {
+    const tables = deterministic.expandedDatasourceTypes.filter(
+      (t) => t.datasourceType !== "many-to-many",
+    );
+    const setups = tables
+      .map((t) =>
+        fill(setupTmpl, {
+          entity: t.name,
+          segment: this.imports.apiPath(t.name),
+        }).trimEnd(),
+      )
+      .join("\n\n");
+    const tests = tables
+      .map((t) => {
+        const tokens = {
+          entity: t.name,
+          pascal: this.casing.convertTypes(t.name),
+          segment: this.imports.apiPath(t.name),
+          missing:
+            (
+              t.fields.find((f) => f.name === t.primaryKeyColumn)?.type ??
+              "integer"
+            ) === "uuid"
+              ? "00000000-0000-0000-0000-000000000000"
+              : "99999",
+          payload: samplePayload(t),
+        };
+        const tmpl =
+          t.datasourceType === "readonly-lookup"
+            ? readonlyTestsTmpl
+            : crudTestsTmpl;
+        return fill(tmpl, tokens).trimEnd();
+      })
+      .join("\n\n");
+    return [
+      content(
+        "app_routes_e2e.rs",
+        fill(fileTmpl, { setups, tests }),
+      ),
+    ];
+  }
+}
 
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
   if (!(await ctx.reader.exists(DATASOURCE_TYPES_YAML))) return [];
   await ctx.reader.read(DATASOURCE_TYPES_YAML);
-  return generateFrom(
+  return new Generator(ctx.settings).from(
     await DeterministicParser(ctx.reader).parse(ctx.settings),
-    ctx.settings,
   );
 };

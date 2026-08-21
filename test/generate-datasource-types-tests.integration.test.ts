@@ -77,9 +77,9 @@ describe("generate datasource types tests", () => {
   const userBody = async (settings: Record<string, string> = {}) => {
     const map = indexEntries(await generateWith(settings));
     const userFile = [...map.keys()].find((name) =>
-      name.endsWith("user_tests.rs"),
+      name.endsWith("userTests.rs"),
     );
-    assert.ok(userFile, "missing user_tests.rs generate entry");
+    assert.ok(userFile, "missing userTests.rs generate entry");
     return entryBody(requireEntry(map, userFile));
   };
 
@@ -98,7 +98,7 @@ describe("generate datasource types tests", () => {
     const byName = indexEntries(await generateWith({}));
     assert.deepEqual(
       [...byName.keys()].sort(),
-      ["role_tests.rs", "user_tests.rs"],
+      ["roleTests.rs", "userTests.rs"],
     );
   });
 

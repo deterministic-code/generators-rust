@@ -105,7 +105,6 @@
   "dependencies": {
     "@deterministic-code/generators-common": "github:deterministic-code/generators-common",
     "@deterministic-code/generators-openapi": "github:deterministic-code/generators-openapi",
-    "change-case": "^5.4.4",
     "mustache": "^4.2.0",
     "pluralize": "^8.0.0",
     "yaml": "^2.6.0"
