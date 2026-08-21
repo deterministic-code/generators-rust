@@ -4,7 +4,7 @@ import { content, type GenerateEntry } from "@deterministic-code/generators-comm
 import {
   DeterministicParser,
   DATASOURCE_TYPES_YAML,
-  type ExpandedDatasourceType,
+  type DatasourceType,
   type IDeterministic,
 } from "./specification-parser.ts";
 import {
@@ -35,7 +35,7 @@ const jsonSample = (type: string): string => {
   }
 };
 
-const samplePayload = (table: ExpandedDatasourceType): string => {
+const samplePayload = (table: DatasourceType): string => {
   const parts = table.fields
     .filter(
       (f) =>
@@ -82,7 +82,7 @@ class Generator extends Emit {
           ),
           missing:
             (
-              t.fields.find((f) => f.name === t.primaryKeyColumn)?.type ??
+              t.fields.find((f) => f.isPrimaryKey === true)?.type ??
               "integer"
             ) === "uuid"
               ? "00000000-0000-0000-0000-000000000000"

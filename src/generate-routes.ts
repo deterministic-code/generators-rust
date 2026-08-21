@@ -6,8 +6,9 @@ import { convertSpecType } from "./base-type-converter.ts";
 import {
   DeterministicParser,
   ROUTES_YAML,
+  primaryKeyColumn,
   type DatasourceField,
-  type ExpandedDatasourceType,
+  type DatasourceType,
   type NestedRouteDescriptor,
   type RouteByField,
   type RouteCandidate,
@@ -228,9 +229,9 @@ const idTypeVariantForPk = (primaryKey: PrimaryKey): string => {
 };
 
 const inferPrimaryKey = (
-  ds: ExpandedDatasourceType | undefined,
+  ds: DatasourceType | undefined,
 ): PrimaryKey => {
-  const column = ds?.primaryKeyColumn ?? "id";
+  const column = primaryKeyColumn(ds);
   const field = ds?.fields.find((f) => f.name === column);
   const pkType = field?.type ?? "integer";
   if (column !== "id" && field !== undefined) {
@@ -293,7 +294,7 @@ const eagerWriteChildrenForEntity = (
 
 const fieldsForEntity = (
   entity: string,
-  datasources: ExpandedDatasourceType[],
+  datasources: DatasourceType[],
 ): Field[] => {
   const ds = datasources.find((d) => d.name === entity);
   if (ds === undefined) return [];
@@ -327,13 +328,13 @@ const buildCrudValidators = (
 
 class Generator extends Emit {
   private readonly views: ViewType[];
-  private readonly datasources: ExpandedDatasourceType[];
+  private readonly datasources: DatasourceType[];
   private readonly nested: NestedRouteDescriptor[];
 
   constructor(
     raw: Record<string, string>,
     views: ViewType[],
-    datasources: ExpandedDatasourceType[],
+    datasources: DatasourceType[],
     nested: NestedRouteDescriptor[],
   ) {
     super(raw);

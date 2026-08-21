@@ -4,7 +4,7 @@ import { content, type GenerateEntry } from "@deterministic-code/generators-comm
 import {
   DeterministicParser,
   ROUTES_YAML,
-  type ExpandedDatasourceType,
+  type DatasourceType,
   type RouteByField,
   type RouteCandidate,
   type IDeterministic,
@@ -52,11 +52,11 @@ const byFieldsBlock = (
     .join("");
 
 class Generator extends Emit {
-  private readonly datasources: ExpandedDatasourceType[];
+  private readonly datasources: DatasourceType[];
 
   constructor(
     raw: Record<string, string>,
-    datasources: ExpandedDatasourceType[],
+    datasources: DatasourceType[],
   ) {
     super(raw);
     this.datasources = datasources;
@@ -82,8 +82,8 @@ class Generator extends Emit {
       entitySnake: candidate.name,
       mountPath,
       missingId: missingIdExpr(
-        table?.fields.find((f) => f.name === (table.primaryKeyColumn ?? "id"))
-          ?.type ?? "integer",
+        table?.fields.find((f) => f.isPrimaryKey === true)?.type ??
+          "integer",
       ),
       occ,
       getListTest: this.casing.fnIdent(

@@ -4,7 +4,7 @@ import { content, type GenerateEntry } from "@deterministic-code/generators-comm
 import {
   DeterministicParser,
   SERVICES_YAML,
-  type ExpandedDatasourceType,
+  type DatasourceType,
   type IDeterministic,
 } from "./specification-parser.ts";
 import { genericTmpl } from "./resources/service-integration-tests.ts";
@@ -12,8 +12,8 @@ import { Emit } from "./emit.ts";
 
 const tableByName = (
   name: string,
-  datasources: ExpandedDatasourceType[],
-): ExpandedDatasourceType | undefined => datasources.find((d) => d.name === name);
+  datasources: DatasourceType[],
+): DatasourceType | undefined => datasources.find((d) => d.name === name);
 
 const missingIdExpr = (idType: string): string =>
   idType === "uuid"
@@ -31,8 +31,8 @@ class Generator extends Emit {
       .map((c) => {
         const table = tableByName(c.name, datasources);
         const pkType =
-          table?.fields.find((f) => f.name === (table.primaryKeyColumn ?? "id"))
-            ?.type ?? "integer";
+          table?.fields.find((f) => f.isPrimaryKey === true)?.type ??
+          "integer";
         const withUuid = table?.fields.some((f) => f.name === "uuid") === true;
         return content(
           this.imports.serviceIntegrationTest(c.name),
