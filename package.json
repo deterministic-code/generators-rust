@@ -104,7 +104,7 @@
   },
   "dependencies": {
     "@deterministic-code/deterministic-specifications-typescript": "github:deterministic-code/deterministic-specifications-typescript#slim-public-api",
-    "@deterministic-code/generators-common": "github:deterministic-code/generators-common",
+    "@deterministic-code/generators-common": "github:deterministic-code/generators-common#main",
     "@deterministic-code/generators-openapi": "github:deterministic-code/generators-openapi",
     "mustache": "^4.2.0",
     "pluralize": "^8.0.0",
