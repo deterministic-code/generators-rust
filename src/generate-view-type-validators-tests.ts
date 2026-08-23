@@ -2,21 +2,26 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
+  authoredViewTypesOf,
+  datasourceTypesOf,
+  unionMembers,
+  viewTypesOf,
+} from "@deterministic-code/generators-common/spec-types";
+import {
   shapedToks,
   viewExpr,
   type ViewTestOpts,
 } from "./common/view-test-fixtures.ts";
 import {
   DeterministicParser,
-  VIEW_TYPES_YAML,
+  TYPES_YAML,
   type IDeterministic,
-  type ShapedView,
-  type ViewType,
+  type Type,
 } from "./specification-parser.ts";
 import { typeTestTmpl } from "./resources/view-type-validators-tests.ts";
 import { Emit } from "./emit.ts";
 
-const shapedCases = (view: ShapedView, opts: ViewTestOpts) => {
+const shapedCases = (view: Type, opts: ViewTestOpts) => {
   const fields = shapedToks(view, opts, new Set([view.name]));
   const cls = opts.casing.convertTypes(view.name);
   const cases = [
@@ -40,24 +45,33 @@ class Generator extends Emit implements ViewTestOpts {
   readonly tables: ViewTestOpts["tables"];
   readonly views: ViewTestOpts["views"];
   readonly expandedViews: ViewTestOpts["expandedViews"];
+  readonly typesByName: ViewTestOpts["typesByName"];
+  readonly datasourceNames: ViewTestOpts["datasourceNames"];
 
   constructor(raw: Record<string, string>, deterministic: IDeterministic) {
     super(raw);
     this.tables = new Map(
-      deterministic.expandedDatasourceTypes.map((t) => [t.name, t]),
+      datasourceTypesOf(deterministic).map((t) => [t.name, t]),
     );
-    this.views = new Map(deterministic.viewTypes.map((v) => [v.name, v]));
+    this.views = new Map(
+      authoredViewTypesOf(deterministic).map((v) => [v.name, v]),
+    );
     this.expandedViews = new Map(
-      deterministic.expandedViewTypes.map((v) => [v.name, v]),
+      viewTypesOf(deterministic).map((v) => [v.name, v]),
     );
+    this.typesByName = new Map(
+      deterministic.expandedTypes.map((t) => [t.name, t]),
+    );
+    this.datasourceNames = new Set(this.tables.keys());
   }
 
   from(): GenerateEntry[] {
     return [...this.views.values()].map((view) => this.tests(view));
   }
 
-  private tests(view: ViewType): GenerateEntry {
+  private tests(view: Type): GenerateEntry {
     const src = this.imports.view(view.name);
+    const members = unionMembers(view);
     return content(
       this.imports.test(src, view.name),
       fill(typeTestTmpl, {
@@ -65,8 +79,8 @@ class Generator extends Emit implements ViewTestOpts {
         typeUse: this.imports.viewQual(view.name),
         fnName: this.casing.convertFields(`validate_${view.name}`),
         cases:
-          view.kind === "union"
-            ? view.members.map((name) => ({
+          members !== undefined
+            ? members.map((name) => ({
                 ident: this.casing.convertFields(`accepts_${name}_member`),
                 fixture: `${this.casing.convertTypes(view.name)}::${this.casing.convertTypes(name)}(${viewExpr(name, this, new Set([view.name]))})`,
                 assertion: "is_ok()",
@@ -80,7 +94,7 @@ class Generator extends Emit implements ViewTestOpts {
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
-  await ctx.reader.read(VIEW_TYPES_YAML);
+  await ctx.reader.read(TYPES_YAML);
   return new Generator(
     ctx.settings,
     await DeterministicParser(ctx.reader).parse(ctx.settings),

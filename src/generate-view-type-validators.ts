@@ -1,14 +1,24 @@
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { emitViewFields, inlinesParent, isAlias } from "./common/view-shape.ts";
+import {
+  authoredViewTypesOf,
+  datasourceTypesOf,
+  unionMembers,
+  viewTypesOf,
+} from "@deterministic-code/generators-common/spec-types";
+import {
+  emitViewFields,
+  fieldRefKind,
+  isAlias,
+  wrapsInheritedDatasource,
+} from "./common/view-shape.ts";
 import {
   DeterministicParser,
-  VIEW_TYPES_YAML,
-  type ShapedView,
-  type ViewField,
-  type ViewType,
+  TYPES_YAML,
   type IDeterministic,
+  type Type,
+  type TypeField,
 } from "./specification-parser.ts";
 import {
   checkArrayNullableTmpl,
@@ -20,12 +30,26 @@ import {
 import { Emit } from "./emit.ts";
 
 class Generator extends Emit {
-  from(deterministic: IDeterministic): GenerateEntry[] {
-    const expandedByName = new Map(
-      deterministic.expandedViewTypes.map((v) => [v.name, v]),
+  private readonly typesByName: Map<string, Type>;
+  private readonly datasourceNames: Set<string>;
+  private readonly expandedByName: Map<string, Type>;
+
+  constructor(raw: Record<string, string>, deterministic: IDeterministic) {
+    super(raw);
+    this.typesByName = new Map(
+      deterministic.expandedTypes.map((t) => [t.name, t]),
     );
-    return deterministic.viewTypes.map((view) =>
-      this.view(view, expandedByName.get(view.name)),
+    this.datasourceNames = new Set(
+      datasourceTypesOf(deterministic).map((t) => t.name),
+    );
+    this.expandedByName = new Map(
+      viewTypesOf(deterministic).map((v) => [v.name, v]),
+    );
+  }
+
+  from(deterministic: IDeterministic): GenerateEntry[] {
+    return authoredViewTypesOf(deterministic).map((view) =>
+      this.view(view, this.expandedByName.get(view.name)),
     );
   }
 
@@ -43,11 +67,12 @@ class Generator extends Emit {
     return this.imports.validatorFn(kind, entity, fn);
   }
 
-  private checkField(field: ViewField): string {
+  private checkField(field: TypeField): string {
     const prop = this.casing.convertFields(field.name);
     const access = `obj.${prop}`;
-    if (field.kind === "primitive") return "";
-    const fn = this.validatorFn(field.base, field.kind);
+    const refKind = fieldRefKind(field, this.typesByName);
+    if (refKind === "primitive") return "";
+    const fn = this.validatorFn(field.base, refKind);
     if (field.isArray) {
       const tmpl = field.isNullable ? checkArrayNullableTmpl : checkArrayTmpl;
       return fill(tmpl, { access, fn }).trimEnd();
@@ -58,31 +83,30 @@ class Generator extends Emit {
     return fill(checkRequiredTmpl, { fn, arg: `&${access}` }).trimEnd();
   }
 
-  private shapedBody(
-    view: ShapedView,
-    expanded: ViewType | undefined,
-  ): string[] {
+  private shapedBody(view: Type, expanded: Type | undefined): string[] {
     const checks: string[] = [];
-    if (view.inherits !== null && !inlinesParent(view)) {
-      const fn = this.validatorFn(view.inherits, "datasource");
-      const arg = isAlias(view) ? "obj" : "&obj.base";
-      checks.push(fill(checkRequiredTmpl, { fn, arg }).trimEnd());
+    if (isAlias(view)) {
+      const fn = this.validatorFn(view.name, "datasource");
+      checks.push(fill(checkRequiredTmpl, { fn, arg: "obj" }).trimEnd());
+    } else if (wrapsInheritedDatasource(view, this.datasourceNames)) {
+      const fn = this.validatorFn(view.inherits!, "datasource");
+      checks.push(fill(checkRequiredTmpl, { fn, arg: "&obj.base" }).trimEnd());
     }
-    for (const line of emitViewFields(view, expanded).map((f) =>
-      this.checkField(f),
-    )) {
+    for (const line of emitViewFields(
+      view,
+      expanded,
+      this.datasourceNames,
+    ).map((f) => this.checkField(f))) {
       if (line !== "") checks.push(line);
     }
     return checks;
   }
 
-  private view(
-    view: ViewType,
-    expanded: ViewType | undefined,
-  ): GenerateEntry {
+  private view(view: Type, expanded: Type | undefined): GenerateEntry {
     const fnName = this.casing.convertFields(`validate_${view.name}`);
     const path = this.imports.viewValidator(view.name);
-    if (view.kind === "union") {
+    const members = unionMembers(view);
+    if (members !== undefined) {
       const cls = this.typePath(view.name, "view");
       return content(
         path,
@@ -92,7 +116,7 @@ class Generator extends Emit {
           isShaped: false,
           fnName,
           typePath: cls,
-          arms: view.members.map((m) => ({
+          arms: members.map((m) => ({
             arm: `${cls}::${this.casing.convertTypes(m)}(inner) => ${this.validatorFn(m, "view")}(inner),`,
           })),
           paramName: "obj",
@@ -122,8 +146,9 @@ class Generator extends Emit {
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
-  await ctx.reader.read(VIEW_TYPES_YAML);
-  return new Generator(ctx.settings).from(
-    await DeterministicParser(ctx.reader).parse(ctx.settings),
+  await ctx.reader.read(TYPES_YAML);
+  const deterministic = await DeterministicParser(ctx.reader).parse(
+    ctx.settings,
   );
+  return new Generator(ctx.settings, deterministic).from(deterministic);
 };

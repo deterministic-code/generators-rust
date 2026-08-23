@@ -103,7 +103,7 @@
     "test": "node --experimental-strip-types --test test/*.test.ts src/common/default-casing.test.ts src/import-generator.test.ts"
   },
   "dependencies": {
-    "@deterministic-code/deterministic-specifications-typescript": "github:deterministic-code/deterministic-specifications-typescript",
+    "@deterministic-code/deterministic-specifications-typescript": "github:deterministic-code/deterministic-specifications-typescript#slim-public-api",
     "@deterministic-code/generators-common": "github:deterministic-code/generators-common",
     "@deterministic-code/generators-openapi": "github:deterministic-code/generators-openapi",
     "mustache": "^4.2.0",

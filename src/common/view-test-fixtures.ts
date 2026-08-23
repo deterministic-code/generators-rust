@@ -1,21 +1,23 @@
-import { inlinesParent, isAlias } from "./view-shape.ts";
+import {
+  isAlias,
+  wrapsInheritedDatasource,
+} from "./view-shape.ts";
 import { sampleForField, samplesForNative } from "./test-samples.ts";
 import { convertSpecType } from "../base-type-converter.ts";
 import type { PackCasing } from "./default-casing.ts";
 import type { RustImportGenerator } from "../import-generator.ts";
-import type {
-  DatasourceType,
-  ShapedView,
-  ViewField,
-  ViewType,
-} from "../specification-parser.ts";
+import type { Type, TypeField } from "../specification-parser.ts";
+import { unionMembers } from "@deterministic-code/generators-common/spec-types";
+import { fieldRefKind } from "./view-shape.ts";
 
 export type ViewTestOpts = {
   casing: PackCasing;
   imports: RustImportGenerator;
-  tables: Map<string, DatasourceType>;
-  views: Map<string, ViewType>;
-  expandedViews: Map<string, ViewType>;
+  tables: Map<string, Type>;
+  views: Map<string, Type>;
+  expandedViews: Map<string, Type>;
+  typesByName: Map<string, Type>;
+  datasourceNames: Set<string>;
 };
 
 export type FieldTok = {
@@ -32,6 +34,7 @@ export const renderDs = (name: string, opts: ViewTestOpts): string => {
   const table = opts.tables.get(name);
   const cls = opts.imports.datasourceQual(name);
   if (table === undefined) return `${cls} {}`;
+  if (table.fields.length === 0) return `${cls} {}`;
   const body = table.fields
     .map(
       (f) =>
@@ -50,16 +53,17 @@ const wrapValue = (
 };
 
 const viewFieldTok = (
-  field: ViewField,
+  field: TypeField,
   opts: ViewTestOpts,
   visited: Set<string>,
 ): FieldTok => {
   let pair: { sample: string; next: string };
-  if (field.kind === "primitive") {
+  const refKind = fieldRefKind(field, opts.typesByName);
+  if (refKind === "primitive") {
     pair = samplesForNative(convertSpecType(field.base), field.base);
   } else {
     const expr =
-      field.kind === "datasource"
+      refKind === "datasource"
         ? renderDs(field.base, opts)
         : viewExpr(field.base, opts, visited);
     pair = { sample: expr, next: expr };
@@ -78,19 +82,16 @@ const viewFieldTok = (
 };
 
 export const shapedToks = (
-  view: ShapedView,
+  view: Type,
   opts: ViewTestOpts,
   visited: Set<string>,
 ): FieldTok[] => {
   const expanded = opts.expandedViews.get(view.name);
-  const source =
-    expanded?.kind === "shaped" ? expanded : view;
+  const source = wrapsInheritedDatasource(view, opts.datasourceNames)
+    ? view
+    : (expanded ?? view);
   const fields = source.fields.map((f) => viewFieldTok(f, opts, visited));
-  if (
-    view.inherits !== null &&
-    !isAlias(view) &&
-    !inlinesParent(view)
-  ) {
+  if (wrapsInheritedDatasource(view, opts.datasourceNames) && view.inherits) {
     const base = renderDs(view.inherits, opts);
     return [
       {
@@ -121,10 +122,14 @@ export const viewExpr = (
     throw new Error(`unknown view: ${name}`);
   }
   const next = new Set(visited).add(name);
-  if (view.kind === "union") {
-    const member = view.members[0];
+  const members = unionMembers(view);
+  if (members !== undefined) {
+    const member = members[0];
     if (member === undefined) return `${opts.imports.viewQual(name)} {}`;
     return `${opts.imports.viewQual(name)}::${opts.casing.convertTypes(member)}(${viewExpr(member, opts, next)})`;
+  }
+  if (isAlias(view)) {
+    return renderDs(view.name, opts);
   }
   const cls = opts.imports.viewQual(name);
   const fields = shapedToks(view, opts, next);

@@ -2,18 +2,22 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
+  datasourceTypesOf,
+  isManyToMany,
+  pkName,
+  tableByName,
+} from "@deterministic-code/generators-common/spec-types";
+import {
   DeterministicParser,
   SERVICES_YAML,
-  type DatasourceType,
   type IDeterministic,
+  type Type,
 } from "./specification-parser.ts";
 import { genericTmpl } from "./resources/service-integration-tests.ts";
 import { Emit } from "./emit.ts";
 
-const tableByName = (
-  name: string,
-  datasources: DatasourceType[],
-): DatasourceType | undefined => datasources.find((d) => d.name === name);
+const typeByName = (name: string, types: Type[]): Type | undefined =>
+  types.find((d) => d.name === name);
 
 const missingIdExpr = (idType: string): string =>
   idType === "uuid"
@@ -23,17 +27,20 @@ const missingIdExpr = (idType: string): string =>
 class Generator extends Emit {
   from(deterministic: IDeterministic): GenerateEntry[] {
     const { generics } = deterministic.services;
-    const datasources = deterministic.expandedDatasourceTypes;
+    const types = datasourceTypesOf(deterministic);
+    const tables = tableByName(deterministic);
     return generics
-      .filter(
-        (c) => tableByName(c.name, datasources)?.datasourceType === "many-to-many",
-      )
+      .filter((c) => {
+        const type = typeByName(c.name, types);
+        return type !== undefined && isManyToMany(type);
+      })
       .map((c) => {
-        const table = tableByName(c.name, datasources);
+        const type = typeByName(c.name, types);
+        const pk =
+          type !== undefined ? pkName(type, tables.get(c.name)) : "id";
         const pkType =
-          table?.fields.find((f) => f.isPrimaryKey === true)?.type ??
-          "integer";
-        const withUuid = table?.fields.some((f) => f.name === "uuid") === true;
+          type?.fields.find((f) => f.name === pk)?.type ?? "integer";
+        const withUuid = type?.fields.some((f) => f.name === "uuid") === true;
         return content(
           this.imports.serviceIntegrationTest(c.name),
           fill(genericTmpl, {

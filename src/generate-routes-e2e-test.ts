@@ -2,10 +2,17 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
+  datasourceTypesOf,
+  isManyToMany,
+  isReadonlyLookup,
+  pkName,
+  tableByName,
+} from "@deterministic-code/generators-common/spec-types";
+import {
   DeterministicParser,
-  DATASOURCE_TYPES_YAML,
-  type DatasourceType,
+  TYPES_YAML,
   type IDeterministic,
+  type Type,
 } from "./specification-parser.ts";
 import {
   crudTestsTmpl,
@@ -35,7 +42,7 @@ const jsonSample = (type: string): string => {
   }
 };
 
-const samplePayload = (table: DatasourceType): string => {
+const samplePayload = (table: Type): string => {
   const parts = table.fields
     .filter(
       (f) =>
@@ -49,10 +56,11 @@ const samplePayload = (table: DatasourceType): string => {
 
 class Generator extends Emit {
   from(deterministic: IDeterministic): GenerateEntry[] {
-    const tables = deterministic.expandedDatasourceTypes.filter(
-      (t) => t.datasourceType !== "many-to-many",
+    const tables = tableByName(deterministic);
+    const types = datasourceTypesOf(deterministic).filter(
+      (t) => !isManyToMany(t),
     );
-    const setups = tables
+    const setups = types
       .map((t) =>
         fill(setupTmpl, {
           entity: t.name,
@@ -65,8 +73,10 @@ class Generator extends Emit {
         }).trimEnd(),
       )
       .join("\n\n");
-    const tests = tables
+    const tests = types
       .map((t) => {
+        const pk = pkName(t, tables.get(t.name));
+        const pkType = t.fields.find((f) => f.name === pk)?.type ?? "integer";
         const tokens = {
           entity: t.name,
           pascal: this.casing.convertTypes(t.name),
@@ -80,19 +90,10 @@ class Generator extends Emit {
           deleteMissingTest: this.casing.fnIdent(
             `${t.name}_delete_missing_returns_non_5xx`,
           ),
-          missing:
-            (
-              t.fields.find((f) => f.isPrimaryKey === true)?.type ??
-              "integer"
-            ) === "uuid"
-              ? "00000000-0000-0000-0000-000000000000"
-              : "99999",
+          missing: pkType === "uuid" ? "00000000-0000-0000-0000-000000000000" : "99999",
           payload: samplePayload(t),
         };
-        const tmpl =
-          t.datasourceType === "readonly-lookup"
-            ? readonlyTestsTmpl
-            : crudTestsTmpl;
+        const tmpl = isReadonlyLookup(t) ? readonlyTestsTmpl : crudTestsTmpl;
         return fill(tmpl, tokens).trimEnd();
       })
       .join("\n\n");
@@ -108,8 +109,8 @@ class Generator extends Emit {
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
-  if (!(await ctx.reader.exists(DATASOURCE_TYPES_YAML))) return [];
-  await ctx.reader.read(DATASOURCE_TYPES_YAML);
+  if (!(await ctx.reader.exists(TYPES_YAML))) return [];
+  await ctx.reader.read(TYPES_YAML);
   return new Generator(ctx.settings).from(
     await DeterministicParser(ctx.reader).parse(ctx.settings),
   );

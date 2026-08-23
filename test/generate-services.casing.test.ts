@@ -4,23 +4,27 @@ import { memoryReader } from "@deterministic-code/generators-common/deterministi
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "../src/generate-services.ts";
 
-const DS_YAML = `types:
+const TYPES = `types:
   - notification_type:
+      tags: [datasource_type, view_type]
       fields:
         - channel_name:
             type: string
+`;
+
+const DATASOURCE = `includes:
+  - types:
+      filter: tag == "datasource_type"
+types:
+  - notification_type:
+      fields:
+        - channel_name:
             is_unique: true
 `;
 
-const VIEW_YAML = `includes:
-  - datasource_types:
-      include: "*"
-types: []
-`;
-
 const SERVICES_YAML = `includes:
-  - view_type_services:
-      filter: 'type is view_type'
+  - types:
+      filter: tag == "view_type"
 services: []
 `;
 
@@ -33,8 +37,8 @@ const byFilename = async (settings: Record<string, string>) => {
   const map = new Map<string, string>();
   for (const entry of await generate({
     reader: memoryReader({
-      "datasource_types.yaml": DS_YAML,
-      "view_types.yaml": VIEW_YAML,
+      "types.yaml": TYPES,
+      "datasource.yaml": DATASOURCE,
       "services.yaml": SERVICES_YAML,
     }),
     settings,

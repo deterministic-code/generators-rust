@@ -2,18 +2,21 @@ import pluralize from "pluralize";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
+import {
+  isReadonlyLookup,
+  pkName,
+  tableByName,
+} from "@deterministic-code/generators-common/spec-types";
 import { convertSpecType } from "./base-type-converter.ts";
 import {
   DeterministicParser,
   ROUTES_YAML,
-  type DatasourceField,
-  type DatasourceType,
+  type DatasourceTable,
   type NestedRouteDescriptor,
   type RouteByField,
   type RouteCandidate,
-  type ViewEnrichment,
-  type ViewType,
   type IDeterministic,
+  type Type,
 } from "./specification-parser.ts";
 import {
   appWiringBodyTmpl,
@@ -36,13 +39,6 @@ type Field = {
   type: string;
   isNullable?: boolean;
   hasDefault?: boolean;
-};
-
-type Enrichment = {
-  targetTable: string;
-  fkColumn: string;
-  newField: string;
-  prefix?: string;
 };
 
 type EagerChild = {
@@ -176,27 +172,6 @@ const buildValidatorFn = (args: {
   return fill(validatorTmpl, { fnName: args.fnName, checks }).trimEnd();
 };
 
-const applyEnrichmentToRequiredFields = (
-  requiredFields: Field[],
-  enrichments: Enrichment[],
-): Field[] => {
-  if (enrichments.length === 0) return requiredFields;
-  const requiredNames = new Set(requiredFields.map((f) => f.name));
-  const fkSet = new Set(enrichments.map((e) => e.fkColumn));
-  const out = requiredFields.filter((f) => !fkSet.has(f.name));
-  for (const e of enrichments) {
-    if (requiredNames.has(e.fkColumn)) {
-      out.push({
-        name: e.newField,
-        type: "string",
-        isNullable: false,
-        hasDefault: false,
-      });
-    }
-  }
-  return out;
-};
-
 const generateCoerceRowFn = (
   booleanFields: Field[],
   binaryFields: Field[],
@@ -228,11 +203,11 @@ const idTypeVariantForPk = (primaryKey: PrimaryKey): string => {
 };
 
 const inferPrimaryKey = (
-  ds: DatasourceType | undefined,
+  type: Type | undefined,
+  table: DatasourceTable | undefined,
 ): PrimaryKey => {
-  const column =
-    ds?.fields.find((f) => f.isPrimaryKey === true)?.name ?? "id";
-  const field = ds?.fields.find((f) => f.name === column);
+  const column = type !== undefined ? pkName(type, table) : "id";
+  const field = type?.fields.find((f) => f.name === column);
   const pkType = field?.type ?? "integer";
   if (column !== "id" && field !== undefined) {
     return {
@@ -256,26 +231,6 @@ const sortedDirectFkChildren = (
     .slice()
     .sort((a, b) => a.fieldName.localeCompare(b.fieldName));
 
-const enrichmentsForEntity = (
-  entity: string,
-  views: ViewType[],
-): Enrichment[] => {
-  const out: Enrichment[] = [];
-  for (const view of views) {
-    if (view.kind !== "shaped") continue;
-    if (view.inherits !== entity && view.name !== entity) continue;
-    for (const e of view.enrichments as ViewEnrichment[]) {
-      out.push({
-        targetTable: e.targetTable,
-        fkColumn: e.fkColumn,
-        newField: e.newField,
-        prefix: e.prefix,
-      });
-    }
-  }
-  return out;
-};
-
 const eagerWriteChildrenForEntity = (
   entity: string,
   nested: NestedRouteDescriptor[],
@@ -292,13 +247,10 @@ const eagerWriteChildrenForEntity = (
       kind: "direct-fk",
     }));
 
-const fieldsForEntity = (
-  entity: string,
-  datasources: DatasourceType[],
-): Field[] => {
-  const ds = datasources.find((d) => d.name === entity);
+const fieldsForEntity = (entity: string, types: Type[]): Field[] => {
+  const ds = types.find((d) => d.name === entity);
   if (ds === undefined) return [];
-  return ds.fields.map((f: DatasourceField) => ({
+  return ds.fields.map((f) => ({
     name: f.name,
     type: f.type,
     isNullable: f.isNullable,
@@ -327,20 +279,24 @@ const buildCrudValidators = (
 });
 
 class Generator extends Emit {
-  private readonly views: ViewType[];
-  private readonly datasources: DatasourceType[];
+  private readonly types: Type[];
+  private readonly tables: Map<string, DatasourceTable>;
   private readonly nested: NestedRouteDescriptor[];
 
   constructor(
     raw: Record<string, string>,
-    views: ViewType[],
-    datasources: DatasourceType[],
+    types: Type[],
+    tables: Map<string, DatasourceTable>,
     nested: NestedRouteDescriptor[],
   ) {
     super(raw);
-    this.views = views;
-    this.datasources = datasources;
+    this.types = types;
+    this.tables = tables;
     this.nested = nested;
+  }
+
+  private typeOf(name: string): Type | undefined {
+    return this.types.find((t) => t.name === name);
   }
 
   from(deterministic: IDeterministic): GenerateEntry[] {
@@ -355,7 +311,8 @@ class Generator extends Emit {
   }
 
   private entityRouter(candidate: RouteCandidate): GenerateEntry {
-    return candidate.datasourceType === "readonly-lookup"
+    const type = this.typeOf(candidate.name);
+    return type !== undefined && isReadonlyLookup(type)
       ? this.readOnly(candidate)
       : this.crud(candidate);
   }
@@ -365,7 +322,8 @@ class Generator extends Emit {
     const className = this.casing.serviceClassName(entitySnake);
     const path = `/api/${this.imports.apiPath(entitySnake)}`;
     const pk = inferPrimaryKey(
-      this.datasources.find((d) => d.name === entitySnake),
+      this.typeOf(entitySnake),
+      this.tables.get(entitySnake),
     );
     const normalizedByFields = normalizeByFields(candidate.byFields);
     const tokens = {
@@ -389,14 +347,14 @@ class Generator extends Emit {
     const entitySnake = candidate.name;
     const className = this.casing.serviceClassName(entitySnake);
     const path = `/api/${this.imports.apiPath(entitySnake)}`;
-    const allFields = fieldsForEntity(entitySnake, this.datasources);
-    const enrichments = enrichmentsForEntity(entitySnake, this.views);
+    const allFields = fieldsForEntity(entitySnake, this.types);
     const eagerWriteChildren = eagerWriteChildrenForEntity(
       entitySnake,
       this.nested,
     );
     const pk = inferPrimaryKey(
-      this.datasources.find((d) => d.name === entitySnake),
+      this.typeOf(entitySnake),
+      this.tables.get(entitySnake),
     );
     const normalizedByFields = normalizeByFields(candidate.byFields);
     const hasByFields = normalizedByFields.length > 0;
@@ -415,10 +373,15 @@ class Generator extends Emit {
     const { createValidator, updateValidator } = buildCrudValidators(
       createValidatorName,
       updateValidatorName,
-      applyEnrichmentToRequiredFields([], enrichments),
+      [],
       directFkChildren,
     );
-    const occ = this.settings.usesOptimisticConcurrency(candidate);
+    const type = this.typeOf(candidate.name);
+    const table = this.tables.get(candidate.name);
+    const occ = this.settings.usesOptimisticConcurrency({
+      tags: type?.tags ?? candidate.tags,
+      useOptimisticConcurrency: table?.useOptimisticConcurrency,
+    });
     const tokens = {
       serviceImport: this.imports.serviceUse(entitySnake, className),
       className,
@@ -478,8 +441,8 @@ export const generate = async (
   );
   return new Generator(
     ctx.settings,
-    deterministic.viewTypes,
-    deterministic.expandedDatasourceTypes,
+    deterministic.expandedTypes,
+    tableByName(deterministic),
     deterministic.routes.nested,
   ).from(deterministic);
 };

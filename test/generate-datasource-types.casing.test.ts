@@ -2,18 +2,19 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { DATASOURCE_TYPES_YAML } from "../src/specification-parser.ts";
+import { TYPES_YAML } from "../src/specification-parser.ts";
 import { generate } from "../src/generate-datasource-types.ts";
 
 const FIXTURE_YAML = `types:
   - notification_type:
+      tags: [datasource_type]
       fields:
         - channel_name:
             type: string
 `;
 
 const fixtureReader = () =>
-  memoryReader({ [DATASOURCE_TYPES_YAML]: FIXTURE_YAML });
+  memoryReader({ [TYPES_YAML]: FIXTURE_YAML });
 
 const entryBody = (entry: GenerateEntry): string => {
   if ("contents" in entry) return String(entry.contents);

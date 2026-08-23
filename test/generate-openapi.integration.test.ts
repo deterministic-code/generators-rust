@@ -15,6 +15,14 @@ describe("generate-openapi", () => {
   it("embeds a spec for each route candidate", async () => {
     const entries = await generate({
       reader: memoryReader({
+        "types.yaml": `types:
+  - user:
+      tags: [datasource_type, view_type]
+      inherits: set
+      fields:
+        - email:
+            type: string
+`,
         "datasource_types.yaml": `types:
   - user:
       fields:
@@ -27,6 +35,8 @@ describe("generate-openapi", () => {
 types: []
 `,
         "routes.yaml": `includes:
+  - types:
+      filter: 'tag == "view_type"'
   - view_type_routes:
       filter: 'type is view_type || type is datasource_type'
 routes: []

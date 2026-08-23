@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
-import { VIEW_TYPES_YAML } from "../src/specification-parser.ts";
+import { TYPES_YAML } from "../src/specification-parser.ts";
 import { generate } from "../src/generate-view-types.ts";
 
 const FIXTURE_YAML = `types:
   - notification_type:
+      tags: [view_type]
       fields:
         - channel_name:
             type: string
@@ -20,7 +21,7 @@ const entryBody = (entry: GenerateEntry): string => {
 const byFilename = async (settings: Record<string, string>) => {
   const map = new Map<string, string>();
   for (const entry of await generate({
-    reader: memoryReader({ [VIEW_TYPES_YAML]: FIXTURE_YAML }),
+    reader: memoryReader({ [TYPES_YAML]: FIXTURE_YAML }),
     settings,
   })) {
     map.set(entry.filename, entryBody(entry));

@@ -4,18 +4,19 @@ import { memoryReader } from "@deterministic-code/generators-common/deterministi
 import { generate } from "../src/generate-perf-server.ts";
 
 describe("generate-perf-server", () => {
-  it("rejects a missing datasource_types.yaml", async () => {
+  it("rejects a missing types.yaml", async () => {
     await assert.rejects(
       () => generate({ reader: memoryReader({}), settings: {} }),
-      /datasource_types\.yaml is required/,
+      /types\.yaml is required/,
     );
   });
 
   it("emits the bin and a Cargo.toml PERF_BIN patch", async () => {
     const entries = await generate({
       reader: memoryReader({
-        "datasource_types.yaml": `types:
+        "types.yaml": `types:
   - user:
+      tags: [datasource_type]
       fields:
         - email:
             type: string
