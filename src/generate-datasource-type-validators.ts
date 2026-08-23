@@ -1,13 +1,17 @@
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
+import {
+  datasourceTypesOf,
+  isPkField,
+} from "@deterministic-code/generators-common/spec-types";
 import type { PackCasing } from "./common/default-casing.ts";
 import {
   DeterministicParser,
-  DATASOURCE_TYPES_YAML,
-  type DatasourceField,
-  type DatasourceType,
+  TYPES_YAML,
   type IDeterministic,
+  type Type,
+  type TypeField,
 } from "./specification-parser.ts";
 import { convertSpecType } from "./base-type-converter.ts";
 import { typeTmpl } from "./resources/datasource-type-validators.ts";
@@ -30,11 +34,12 @@ const uuidChecks = (prop: string, ref: string): string[] => [
 ];
 
 const rawChecks = (
-  field: DatasourceField,
+  field: TypeField,
   prop: string,
   ref: string,
 ): string[] => {
   const { type, name, minSize, size, references } = field;
+  const max = typeof size === "number" ? size : undefined;
   switch (type) {
     case "string":
     case "character":
@@ -45,9 +50,9 @@ const rawChecks = (
           `${prop}: must be at least ${minSize} chars`,
         ],
         [
-          size !== undefined && size >= 0,
-          `${ref}.chars().count() > ${size}`,
-          `${prop}: exceeds ${size} chars`,
+          max !== undefined && max >= 0,
+          `${ref}.chars().count() > ${max}`,
+          `${prop}: exceeds ${max} chars`,
         ],
       ]);
     case "uuid":
@@ -70,9 +75,9 @@ const rawChecks = (
           `${prop}: must be at least ${minSize}`,
         ],
         [
-          size !== undefined,
-          `${ref} > ${size}${suffix}`,
-          `${prop}: exceeds ${size}`,
+          max !== undefined,
+          `${ref} > ${max}${suffix}`,
+          `${prop}: exceeds ${max}`,
         ],
       ]);
     }
@@ -84,9 +89,9 @@ const rawChecks = (
           `${prop}: must be at least ${minSize}`,
         ],
         [
-          size !== undefined,
-          `${ref} > ${floatLit(size!)}`,
-          `${prop}: exceeds ${size}`,
+          max !== undefined,
+          `${ref} > ${floatLit(max ?? 0)}`,
+          `${prop}: exceeds ${max}`,
         ],
       ]);
     default:
@@ -97,9 +102,9 @@ const rawChecks = (
 const pad = (n: number, line: string): string => `${"    ".repeat(n)}${line}`;
 
 const checksForField = (
-  field: DatasourceField,
+  field: TypeField,
   casing: PackCasing,
-  isStandardId = false,
+  isStandardId: boolean,
 ): string[] => {
   const prop = casing.convertFields(field.name);
   if (isStandardId) {
@@ -131,14 +136,14 @@ const checksForField = (
 
 class Generator extends Emit {
   from(deterministic: IDeterministic): GenerateEntry[] {
-    return deterministic.expandedDatasourceTypes.map((table) =>
+    return datasourceTypesOf(deterministic).map((table) =>
       this.validator(table),
     );
   }
 
-  private validator(table: DatasourceType): GenerateEntry {
+  private validator(table: Type): GenerateEntry {
     const lines = table.fields.flatMap((field) =>
-      checksForField(field, this.casing, field.name === "id"),
+      checksForField(field, this.casing, isPkField(field, table)),
     );
     const has = lines.length > 0;
     return content(
@@ -158,7 +163,7 @@ class Generator extends Emit {
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
-  await ctx.reader.read(DATASOURCE_TYPES_YAML);
+  await ctx.reader.read(TYPES_YAML);
   return new Generator(ctx.settings).from(
     await DeterministicParser(ctx.reader).parse(ctx.settings),
   );

@@ -4,37 +4,46 @@ import { memoryReader } from "@deterministic-code/generators-common/deterministi
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "../src/generate-service-tests.ts";
 
-const DS_YAML = `types:
+const TYPES = `types:
   - user:
+      tags: [datasource_type, view_type]
+      inherits: set
       fields:
         - email:
             type: string
-            is_unique: true
             size: 256
   - role:
-      datasource_type: readonly-lookup
+      tags: [datasource_type, view_type, readonly_lookup]
+      inherits: set
       fields:
         - name:
             type: string
+`;
+
+const DATASOURCE = `includes:
+  - types:
+      filter: tag == "datasource_type"
+types:
+  - user:
+      fields:
+        - email:
+            is_unique: true
+  - role:
+      fields:
+        - name:
             is_unique: true
 `;
 
-const VIEW_YAML = `includes:
-  - datasource_types:
-      include: "*"
-types: []
-`;
-
 const SERVICES_YAML = `includes:
-  - view_type_services:
-      filter: 'type is view_type'
+  - types:
+      filter: tag == "view_type"
 services:
   - name: ReportService
 `;
 
 const yaml = {
-  "datasource_types.yaml": DS_YAML,
-  "view_types.yaml": VIEW_YAML,
+  "types.yaml": TYPES,
+  "datasource.yaml": DATASOURCE,
   "services.yaml": SERVICES_YAML,
 };
 
@@ -68,7 +77,7 @@ describe("generate-service-tests", () => {
     assert.match(user, /fn invoke_find_all_delegates_to_the_inner_service/);
   });
 
-  it("emits nothing without view_type_services", async () => {
+  it("emits nothing without a types include", async () => {
     const entries = await generate({
       reader: memoryReader({
         ...yaml,
@@ -109,8 +118,7 @@ describe("generate-service-tests", () => {
       () =>
         generate({
           reader: memoryReader({
-            "datasource_types.yaml": DS_YAML,
-            "view_types.yaml": VIEW_YAML,
+            "types.yaml": TYPES,
           }),
           settings: {},
         }),

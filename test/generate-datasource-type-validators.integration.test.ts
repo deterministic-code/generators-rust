@@ -1,21 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
-import {
-  DATASOURCE_TYPES_YAML,
-} from "../src/specification-parser.ts";
+import { TYPES_YAML } from "../src/specification-parser.ts";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "../src/generate-datasource-type-validators.ts";
 
 const FIXTURE_YAML = `types:
   - user:
-      datasource_type: audit
+      tags: [datasource_type]
+      inherits: set
       fields:
         - email:
             type: string
             size: 256
             min_size: 3
         - role_id:
+            type: integer
             references: role.id
         - nick_name:
             type: string
@@ -24,13 +24,15 @@ const FIXTURE_YAML = `types:
             type: float
             min_size: 0
   - role:
+      tags: [datasource_type]
+      inherits: set
       fields:
         - name:
             type: string
 `;
 
 const fixtureReader = () =>
-  memoryReader({ [DATASOURCE_TYPES_YAML]: FIXTURE_YAML });
+  memoryReader({ [TYPES_YAML]: FIXTURE_YAML });
 
 const entryBody = (entry: GenerateEntry): string => {
   if ("contents" in entry) return String(entry.contents);
@@ -77,14 +79,14 @@ describe("generate datasource type validators", () => {
     return entryBody(requireEntry(map, userFile));
   };
 
-  it("rejects a missing datasource_types.yaml", async () => {
+  it("rejects a missing types.yaml", async () => {
     await assert.rejects(
       () =>
         generate({
           reader: memoryReader({}),
           settings: {},
         }),
-      /missing datasource_types\.yaml/,
+      /missing types\.yaml/,
     );
   });
 
@@ -109,10 +111,9 @@ describe("generate datasource type validators", () => {
     assert.doesNotMatch(user, /nick_name/);
   });
 
-  it("drops uuid checks when datasource.id_type=uuid", async () => {
+  it("uses uuid id checks when datasource.id_type=uuid", async () => {
     const user = await userBody({ "datasource.id_type": "uuid" });
     assert.match(user, /obj\.id\.to_string\(\)/);
-    assert.doesNotMatch(user, /obj\.uuid/);
   });
 
   it("writes codegen.schema_version into the file header", async () => {

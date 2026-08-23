@@ -2,10 +2,14 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
+  datasourceTypesOf,
+  tableKind,
+} from "@deterministic-code/generators-common/spec-types";
+import {
   DeterministicParser,
-  DATASOURCE_TYPES_YAML,
-  type DatasourceType,
+  TYPES_YAML,
   type IDeterministic,
+  type Type,
 } from "./specification-parser.ts";
 import { convertSpecType } from "./base-type-converter.ts";
 import { typeTmpl } from "./resources/datasource-types.ts";
@@ -21,12 +25,10 @@ const rustTypeFor = (field: {
 
 class Generator extends Emit {
   from(deterministic: IDeterministic): GenerateEntry[] {
-    return deterministic.expandedDatasourceTypes.map((table) =>
-      this.type(table),
-    );
+    return datasourceTypesOf(deterministic).map((table) => this.type(table));
   }
 
-  private type(table: DatasourceType): GenerateEntry {
+  private type(table: Type): GenerateEntry {
     const fields = table.fields;
     const structName = this.casing.convertTypes(table.name);
     return content(
@@ -36,7 +38,7 @@ class Generator extends Emit {
         simpleDoc: this.settings.simpleDoc,
         descriptionDoc: this.settings.descriptionDoc,
         structName,
-        datasourceType: table.datasourceType,
+        datasourceType: tableKind(table),
         fieldCount: String(fields.length),
         fields: fields.map((f) => ({
           ident: this.casing.convertFields(f.name),
@@ -50,7 +52,7 @@ class Generator extends Emit {
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
-  await ctx.reader.read(DATASOURCE_TYPES_YAML);
+  await ctx.reader.read(TYPES_YAML);
   return new Generator(ctx.settings).from(
     await DeterministicParser(ctx.reader).parse(ctx.settings),
   );

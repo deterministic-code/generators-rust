@@ -1,10 +1,11 @@
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
+import { datasourceTypesOf } from "@deterministic-code/generators-common/spec-types";
 import { samplesForNative, wrapOption } from "./common/test-samples.ts";
 import {
   DeterministicParser,
-  DATASOURCE_TYPES_YAML,
+  TYPES_YAML,
   type IDeterministic,
 } from "./specification-parser.ts";
 import { convertSpecType } from "./base-type-converter.ts";
@@ -13,7 +14,7 @@ import { Emit } from "./emit.ts";
 
 class Generator extends Emit {
   from(deterministic: IDeterministic): GenerateEntry[] {
-    return deterministic.expandedDatasourceTypes.map((table) => {
+    return datasourceTypesOf(deterministic).map((table) => {
       const fields = table.fields.map((field) => {
         const ident = this.casing.convertFields(field.name);
         const native = convertSpecType(field.type);
@@ -47,7 +48,7 @@ class Generator extends Emit {
 export const generate = async (
   ctx: GenerateContext,
 ): Promise<GenerateEntry[]> => {
-  await ctx.reader.read(DATASOURCE_TYPES_YAML);
+  await ctx.reader.read(TYPES_YAML);
   return new Generator(ctx.settings).from(
     await DeterministicParser(ctx.reader).parse(ctx.settings),
   );

@@ -2,12 +2,18 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
+  isReadonlyLookup,
+  pkName,
+  tableByName,
+} from "@deterministic-code/generators-common/spec-types";
+import {
   DeterministicParser,
   ROUTES_YAML,
-  type DatasourceType,
+  type DatasourceTable,
   type RouteByField,
   type RouteCandidate,
   type IDeterministic,
+  type Type,
 } from "./specification-parser.ts";
 import {
   byFieldGetListTmpl,
@@ -52,14 +58,17 @@ const byFieldsBlock = (
     .join("");
 
 class Generator extends Emit {
-  private readonly datasources: DatasourceType[];
+  private readonly types: Type[];
+  private readonly tables: Map<string, DatasourceTable>;
 
   constructor(
     raw: Record<string, string>,
-    datasources: DatasourceType[],
+    types: Type[],
+    tables: Map<string, DatasourceTable>,
   ) {
     super(raw);
-    this.datasources = datasources;
+    this.types = types;
+    this.tables = tables;
   }
 
   from(deterministic: IDeterministic): GenerateEntry[] {
@@ -67,11 +76,17 @@ class Generator extends Emit {
   }
 
   private test(candidate: RouteCandidate): GenerateEntry {
-    const table = this.datasources.find((d) => d.name === candidate.name);
+    const type = this.types.find((d) => d.name === candidate.name);
+    const table = this.tables.get(candidate.name);
     const path = this.imports.routeTest(candidate.name);
     const mountPath = `/api/${this.imports.apiPath(candidate.name)}`;
-    const occ = this.settings.usesOptimisticConcurrency(candidate);
+    const occ = this.settings.usesOptimisticConcurrency({
+      tags: type?.tags ?? candidate.tags,
+      useOptimisticConcurrency: table?.useOptimisticConcurrency,
+    });
     const fileBase = this.imports.routeModule(candidate.name);
+    const pk = type !== undefined ? pkName(type, table) : "id";
+    const pkType = type?.fields.find((f) => f.name === pk)?.type ?? "integer";
     const shared = {
       fileBase,
       serviceImport: this.imports.serviceUse(
@@ -81,10 +96,7 @@ class Generator extends Emit {
       className: this.casing.serviceClassName(candidate.name),
       entitySnake: candidate.name,
       mountPath,
-      missingId: missingIdExpr(
-        table?.fields.find((f) => f.isPrimaryKey === true)?.type ??
-          "integer",
-      ),
+      missingId: missingIdExpr(pkType),
       occ,
       getListTest: this.casing.fnIdent(
         `get_${candidate.name}_list_returns_200`,
@@ -109,7 +121,7 @@ class Generator extends Emit {
         (stem) => this.casing.fnIdent(stem),
       ),
     };
-    if (candidate.datasourceType === "readonly-lookup") {
+    if (type !== undefined && isReadonlyLookup(type)) {
       return content(path, fill(readonlyTmpl, shared));
     }
     return content(path, fill(crudTmpl, shared));
@@ -125,6 +137,7 @@ export const generate = async (
   );
   return new Generator(
     ctx.settings,
-    deterministic.expandedDatasourceTypes,
+    deterministic.expandedTypes,
+    tableByName(deterministic),
   ).from(deterministic);
 };

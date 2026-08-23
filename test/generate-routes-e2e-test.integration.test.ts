@@ -4,7 +4,7 @@ import { memoryReader } from "@deterministic-code/generators-common/deterministi
 import { generate } from "../src/generate-routes-e2e-test.ts";
 
 describe("generate-routes-e2e-test", () => {
-  it("emits nothing when datasource_types.yaml is absent", async () => {
+  it("emits nothing when types.yaml is absent", async () => {
     const entries = await generate({
       reader: memoryReader({}),
       settings: {},
@@ -15,8 +15,10 @@ describe("generate-routes-e2e-test", () => {
   it("emits an in-memory router e2e file for a regular table", async () => {
     const entries = await generate({
       reader: memoryReader({
-        "datasource_types.yaml": `types:
+        "types.yaml": `types:
   - contact:
+      tags: [datasource_type]
+      inherits: set
       fields:
         - name: { type: string }
 `,

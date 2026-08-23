@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
-import {
-  DATASOURCE_TYPES_YAML,
-  VIEW_TYPES_YAML,
-} from "../src/specification-parser.ts";
+import { TYPES_YAML } from "../src/specification-parser.ts";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "../src/generate-view-types.ts";
 
-const DS_YAML = `types:
+const TYPES = `types:
   - user:
-      datasource_type: audit
+      tags: [datasource_type, view_type]
+      inherits: set
       fields:
         - email:
             type: string
@@ -21,42 +19,41 @@ const DS_YAML = `types:
             type: string
             is_nullable: true
   - role:
-      datasource_type: readonly-lookup
+      tags: [datasource_type, view_type, readonly_lookup]
+      inherits: set
       fields:
         - name:
             type: string
   - tag:
+      tags: [datasource_type, view_type]
+      inherits: set
       fields:
         - label:
             type: string
-`;
-
-const VIEW_YAML = `includes:
-  - datasource_types:
-      include: "*"
-      auto_enrich: true
-types:
   - user_summary:
-      inherits: datasource_types.user
-      omit:
-        - nick_name
+      tags: [view_type]
+      inherits: user
+      remove_fields: [nick_name, role_id]
       fields:
         - display_name:
             type: string
   - payment:
+      tags: [view_type]
       one_of:
         - card_payment
         - cash_payment
   - card_payment:
+      tags: [view_type]
       fields:
         - amount:
             type: decimal
         - tags:
-            type: datasource_types.tag[]
+            type: tag[]
         - note:
             type: string
             is_nullable: true
   - cash_payment:
+      tags: [view_type]
       fields:
         - amount:
             type: decimal
@@ -64,8 +61,7 @@ types:
 
 const fixtureReader = () =>
   memoryReader({
-    [VIEW_TYPES_YAML]: VIEW_YAML,
-    [DATASOURCE_TYPES_YAML]: DS_YAML,
+    [TYPES_YAML]: TYPES,
   });
 
 const entryBody = (entry: GenerateEntry): string => {
@@ -107,10 +103,10 @@ describe("generate view types", () => {
     return entryBody(requireEntry(map, file));
   };
 
-  it("rejects a missing view_types.yaml", async () => {
+  it("rejects a missing types.yaml", async () => {
     await assert.rejects(
       () => generate({ reader: memoryReader({}), settings: {} }),
-      /missing view_types\.yaml/,
+      /missing types\.yaml/,
     );
   });
 

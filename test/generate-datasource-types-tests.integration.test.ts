@@ -1,20 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
-import {
-  DATASOURCE_TYPES_YAML,
-} from "../src/specification-parser.ts";
+import { TYPES_YAML } from "../src/specification-parser.ts";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "../src/generate-datasource-types-tests.ts";
 
 const FIXTURE_YAML = `types:
   - user:
-      datasource_type: audit
+      tags: [datasource_type]
+      inherits: set
       fields:
         - email:
             type: string
             size: 256
         - role_id:
+            type: integer
             references: role.id
         - uuid:
             type: uuid
@@ -30,13 +30,15 @@ const FIXTURE_YAML = `types:
         - avatar:
             type: binary
   - role:
+      tags: [datasource_type]
+      inherits: set
       fields:
         - name:
             type: string
 `;
 
 const fixtureReader = () =>
-  memoryReader({ [DATASOURCE_TYPES_YAML]: FIXTURE_YAML });
+  memoryReader({ [TYPES_YAML]: FIXTURE_YAML });
 
 const entryBody = (entry: GenerateEntry): string => {
   if ("contents" in entry) return String(entry.contents);
@@ -83,14 +85,14 @@ describe("generate datasource types tests", () => {
     return entryBody(requireEntry(map, userFile));
   };
 
-  it("rejects a missing datasource_types.yaml", async () => {
+  it("rejects a missing types.yaml", async () => {
     await assert.rejects(
       () =>
         generate({
           reader: memoryReader({}),
           settings: {},
         }),
-      /missing datasource_types\.yaml/,
+      /missing types\.yaml/,
     );
   });
 
@@ -108,13 +110,11 @@ describe("generate datasource types tests", () => {
     assert.match(user, /fn sample\(\) -> User \{/);
   });
 
-  it("covers getters and setters for system columns and declared fields", async () => {
+  it("covers getters and setters for inherited id and declared fields", async () => {
     const user = await userBody();
     const fields = [
       "id",
       "uuid",
-      "created",
-      "updated",
       "email",
       "role_id",
       "created_at",
@@ -131,7 +131,7 @@ describe("generate datasource types tests", () => {
     assert.doesNotMatch(user, /fn allows_setting_email_to_none\(/);
     assert.match(
       user,
-      /created: chrono::DateTime::parse_from_rfc3339\("2024-01-01T00:00:00.000Z"\)/,
+      /created_at: chrono::DateTime::parse_from_rfc3339\("2024-01-01T00:00:00.000Z"\)/,
     );
     assert.match(user, /email: String::from\("sample"\)/);
     assert.match(user, /active: false,/);
@@ -139,14 +139,11 @@ describe("generate datasource types tests", () => {
     assert.match(user, /nick_name: Some\(String::from\("sample"\)\)/);
   });
 
-  it("drops the uuid column and uses uuid ids when datasource.id_type=uuid", async () => {
+  it("uses uuid ids when datasource.id_type=uuid", async () => {
     const user = await userBody({ "datasource.id_type": "uuid" });
     assert.match(user, /fn gets_id\(/);
     assert.match(user, /fn sets_id\(/);
-    assert.doesNotMatch(user, /fn gets_uuid\(/);
-    assert.doesNotMatch(user, /fn sets_uuid\(/);
     assert.match(user, /let initial = String::from\("00000000-0000-0000-0000-000000000000"\);/);
-    assert.match(user, /role_id: String::from\("00000000-0000-0000-0000-000000000000"\),/);
   });
 
   it("uses i64 ids when datasource.id_type=biginteger", async () => {

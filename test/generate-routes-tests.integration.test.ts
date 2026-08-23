@@ -4,42 +4,58 @@ import { memoryReader } from "@deterministic-code/generators-common/deterministi
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "../src/generate-routes-tests.ts";
 
-const DS_YAML = `types:
+const TYPES = `types:
   - user:
+      tags: [datasource_type, view_type]
+      inherits: set
       fields:
         - email:
             type: string
-            is_unique: true
         - role_id:
             type: number
             references: role.id
   - role:
-      datasource_type: readonly-lookup
+      tags: [datasource_type, view_type, readonly_lookup]
+      inherits: set
       fields:
         - name:
             type: string
-            is_unique: true
   - order:
-      use_optimistic_concurrency: true
+      tags: [datasource_type, view_type]
+      inherits: set
       fields:
         - label:
             type: string
   - sku:
+      tags: [datasource_type, view_type]
       fields:
         - code:
             type: string
-            primary_key: true
 `;
 
-const VIEW_YAML = `includes:
-  - datasource_types:
-      include: "*"
-types: []
+const DATASOURCE = `includes:
+  - types:
+      filter: tag == "datasource_type"
+types:
+  - user:
+      fields:
+        - email:
+            is_unique: true
+  - role:
+      fields:
+        - name:
+            is_unique: true
+  - order:
+      use_optimistic_concurrency: true
+  - sku:
+      fields:
+        - code:
+            is_fixed_id: true
 `;
 
 const ROUTES_YAML = `includes:
-  - view_type_routes:
-      filter: 'type is view_type || type is datasource_type'
+  - types:
+      filter: 'tag == "view_type"'
 routes:
   - get_users_by_email:
   - users_by_role_id:
@@ -53,8 +69,8 @@ routes:
 `;
 
 const yaml = {
-  "datasource_types.yaml": DS_YAML,
-  "view_types.yaml": VIEW_YAML,
+  "types.yaml": TYPES,
+  "datasource.yaml": DATASOURCE,
   "routes.yaml": ROUTES_YAML,
 };
 
@@ -109,7 +125,7 @@ describe("generate-routes-tests", () => {
     assert.match(orders, /fn delete_order_missing_is_not_5xx/);
   });
 
-  it("emits nothing without view_type_routes", async () => {
+  it("emits nothing without a types include", async () => {
     const entries = await generate({
       reader: memoryReader({
         ...yaml,
@@ -125,7 +141,7 @@ describe("generate-routes-tests", () => {
       reader: memoryReader({
         ...yaml,
         "routes.yaml": `includes:
-  - view_type_routes:
+  - types:
       filter: 'type == "user"'
 routes: []
 `,
@@ -153,7 +169,7 @@ routes: []
       reader: memoryReader({
         ...yaml,
         "routes.yaml": `includes:
-  - view_type_routes:
+  - types:
       filter: 'type == "user"'
 routes: []
 `,
@@ -174,8 +190,7 @@ routes: []
       () =>
         generate({
           reader: memoryReader({
-            "datasource_types.yaml": DS_YAML,
-            "view_types.yaml": VIEW_YAML,
+            "types.yaml": TYPES,
           }),
           settings: {},
         }),

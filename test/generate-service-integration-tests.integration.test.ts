@@ -4,20 +4,22 @@ import { memoryReader } from "@deterministic-code/generators-common/deterministi
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "../src/generate-service-integration-tests.ts";
 
-const DS_YAML = `types:
+const TYPES = `types:
   - user:
+      tags: [datasource_type, view_type]
+      inherits: set
       fields:
         - email:
             type: string
-            is_unique: true
   - role:
-      datasource_type: readonly-lookup
+      tags: [datasource_type, view_type, readonly_lookup]
+      inherits: set
       fields:
         - name:
             type: string
-            is_unique: true
   - user_role:
-      datasource_type: many-to-many
+      tags: [datasource_type, view_type, many_to_many]
+      inherits: set
       fields:
         - user_id:
             type: number
@@ -27,22 +29,30 @@ const DS_YAML = `types:
             references: role.id
 `;
 
-const VIEW_YAML = `includes:
-  - datasource_types:
-      include: "*"
-types: []
+const DATASOURCE = `includes:
+  - types:
+      filter: tag == "datasource_type"
+types:
+  - user:
+      fields:
+        - email:
+            is_unique: true
+  - role:
+      fields:
+        - name:
+            is_unique: true
 `;
 
 const SERVICES_YAML = `includes:
-  - view_type_services:
-      filter: 'type is view_type'
+  - types:
+      filter: tag == "view_type"
 services:
   - name: ReportService
 `;
 
 const yaml = {
-  "datasource_types.yaml": DS_YAML,
-  "view_types.yaml": VIEW_YAML,
+  "types.yaml": TYPES,
+  "datasource.yaml": DATASOURCE,
   "services.yaml": SERVICES_YAML,
 };
 
@@ -71,16 +81,16 @@ describe("generate-service-integration-tests", () => {
     assert.match(body, /fn service\(\) -> UserRoleService/);
     assert.match(body, /SqliteDatasourceOptions::in_memory/);
     assert.match(body, /CREATE TABLE user_role/);
-    assert.match(body, /fn add_inserts_a_row_and_auto_populates_id_uuid_created_updated/);
-    assert.match(body, /row\.get\("uuid"\)/);
+    assert.match(body, /fn add_inserts_a_row_and_auto_populates_id_created_updated/);
     assert.match(body, /json!\(99999\)/);
   });
 
-  it("emits nothing when datasource_types.yaml is absent", async () => {
+  it("emits nothing when types.yaml has no datasource types", async () => {
     const entries = await generate({
       reader: memoryReader({
-        "view_types.yaml": `types:
+        "types.yaml": `types:
   - report:
+      tags: [view_type]
       fields:
         - title:
             type: string
@@ -92,7 +102,7 @@ describe("generate-service-integration-tests", () => {
     assert.deepEqual(entries, []);
   });
 
-  it("emits nothing without view_type_services", async () => {
+  it("emits nothing without a types include", async () => {
     const entries = await generate({
       reader: memoryReader({
         ...yaml,
@@ -103,7 +113,7 @@ describe("generate-service-integration-tests", () => {
     assert.deepEqual(entries, []);
   });
 
-  it("drops the uuid stamp assertion when datasource.id_type is uuid", async () => {
+  it("uses a uuid missing id when datasource.id_type is uuid", async () => {
     const entries = await generate({
       reader: memoryReader(yaml),
       settings: { "datasource.id_type": "uuid" },
@@ -136,8 +146,7 @@ describe("generate-service-integration-tests", () => {
       () =>
         generate({
           reader: memoryReader({
-            "datasource_types.yaml": DS_YAML,
-            "view_types.yaml": VIEW_YAML,
+            "types.yaml": TYPES,
           }),
           settings: {},
         }),

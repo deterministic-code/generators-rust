@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { memoryReader } from "@deterministic-code/generators-common/deterministic-reader";
-import {
-  DATASOURCE_TYPES_YAML,
-  VIEW_TYPES_YAML,
-} from "../src/specification-parser.ts";
+import { TYPES_YAML } from "../src/specification-parser.ts";
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "../src/generate-view-types-tests.ts";
 
-const DS_YAML = `types:
+const TYPES = `types:
   - user:
-      datasource_type: audit
+      tags: [datasource_type, view_type]
+      inherits: set
       fields:
         - email:
             type: string
@@ -21,16 +19,23 @@ const DS_YAML = `types:
             type: string
             is_nullable: true
   - role:
-      datasource_type: readonly-lookup
+      tags: [datasource_type, view_type, readonly_lookup]
+      inherits: set
       fields:
         - name:
             type: string
-            is_unique: true
   - tag:
+      tags: [datasource_type, view_type]
+      inherits: set
       fields:
         - label:
             type: string
+  - missing:
+      tags: [datasource_type]
+      fields: []
   - wide:
+      tags: [datasource_type, view_type]
+      inherits: set
       fields:
         - u32_val:
             type: unsignedinteger
@@ -42,25 +47,20 @@ const DS_YAML = `types:
             type: integer
         - i16_val:
             type: smallinteger
-`;
-
-const VIEW_YAML = `includes:
-  - datasource_types:
-      include: "*"
-      auto_enrich: true
-types:
   - user_summary:
-      inherits: datasource_types.user
-      omit:
-        - nick_name
+      tags: [view_type]
+      inherits: user
+      remove_fields: [nick_name, role_id]
       fields:
         - display_name:
             type: string
   - payment:
+      tags: [view_type]
       one_of:
         - card_payment
         - cash_payment
   - card_payment:
+      tags: [view_type]
       fields:
         - amount:
             type: decimal
@@ -87,9 +87,9 @@ types:
         - ref_id:
             type: reference
         - tags:
-            type: datasource_types.tag[]
+            type: tag[]
         - ghost:
-            type: datasource_types.missing
+            type: missing
         - owner:
             type: user_summary
         - note:
@@ -99,31 +99,38 @@ types:
             type: boolean[]
             is_nullable: true
   - cash_payment:
+      tags: [view_type]
       fields:
         - amount:
             type: decimal
   - tagged:
-      inherits: datasource_types.tag
+      tags: [view_type]
+      inherits: tag
       fields:
         - extra:
             type: string
   - empty_view:
+      tags: [view_type]
       fields: []
   - empty_union:
+      tags: [view_type]
       one_of: []
   - wraps_empty:
+      tags: [view_type]
       fields:
         - inner:
             type: empty_union
   - orphan:
-      inherits: datasource_types.missing
+      tags: [view_type]
+      inherits: missing
       fields:
         - label:
             type: string
 `;
 
-const SIMPLE_VIEW_YAML = `types:
+const SIMPLE_TYPES = `types:
   - card_payment:
+      tags: [view_type]
       fields:
         - amount:
             type: decimal
@@ -131,13 +138,9 @@ const SIMPLE_VIEW_YAML = `types:
             type: datetime
 `;
 
-const fixtureReader = (
-  viewYaml: string = VIEW_YAML,
-  dsYaml: string | undefined = DS_YAML,
-) =>
+const fixtureReader = (yaml: string = TYPES) =>
   memoryReader({
-    [VIEW_TYPES_YAML]: viewYaml,
-    ...(dsYaml === undefined ? {} : { [DATASOURCE_TYPES_YAML]: dsYaml }),
+    [TYPES_YAML]: yaml,
   });
 
 const entryBody = (entry: GenerateEntry): string => {
@@ -172,55 +175,36 @@ const requireEntry = (
 describe("generate view types tests", () => {
   const generateWith = (
     settings: Record<string, string> = {},
-    viewYaml?: string,
-    dsYaml?: string,
+    yaml?: string,
   ) =>
     generate({
-      reader: fixtureReader(viewYaml, dsYaml),
+      reader: fixtureReader(yaml),
       settings,
     });
 
   const bodyOf = async (
     suffix: string,
     settings: Record<string, string> = {},
-    viewYaml?: string,
-    dsYaml?: string,
+    yaml?: string,
   ) => {
-    const map = indexEntries(await generateWith(settings, viewYaml, dsYaml));
+    const map = indexEntries(await generateWith(settings, yaml));
     const file = [...map.keys()].find((name) => name.endsWith(suffix));
     assert.ok(file, `missing ${suffix} generate entry`);
     return entryBody(requireEntry(map, file));
   };
 
-  it("rejects a missing view_types.yaml", async () => {
+  it("rejects a missing types.yaml", async () => {
     await assert.rejects(
       () =>
         generate({
           reader: memoryReader({}),
           settings: {},
         }),
-      /missing view_types\.yaml/,
+      /missing types\.yaml/,
     );
   });
 
-  it("rejects a datasource_types include without datasource_types.yaml", async () => {
-    await assert.rejects(
-      () =>
-        generate({
-          reader: memoryReader({
-            [VIEW_TYPES_YAML]: `includes:
-  - datasource_types:
-      include: "*"
-types: []
-`,
-          }),
-          settings: {},
-        }),
-      /no datasource_types\.yaml was provided/,
-    );
-  });
-
-  it("emits one test file per expanded view", async () => {
+  it("emits one test file per authored view", async () => {
     const byName = indexEntries(await generateWith({}));
     assert.deepEqual(
       [...byName.keys()].sort(),
@@ -234,11 +218,6 @@ types: []
         "roleTests.rs",
         "tagTests.rs",
         "taggedTests.rs",
-        "updateTagTests.rs",
-        "updateTaggedTests.rs",
-        "updateUserSummaryTests.rs",
-        "updateUserTests.rs",
-        "updateWideTests.rs",
         "userSummaryTests.rs",
         "userTests.rs",
         "wideTests.rs",
@@ -327,7 +306,6 @@ types: []
   it("uses uuid ids when datasource.id_type=uuid", async () => {
     const user = await bodyOf("userTests.rs", { "datasource.id_type": "uuid" });
     assert.match(user, /id: String::from\("00000000-0000-0000-0000-000000000000"\)/);
-    assert.doesNotMatch(user, /fn gets_uuid\(/);
   });
 
   it("uses i64 ids when datasource.id_type=biginteger", async () => {
@@ -344,11 +322,11 @@ types: []
           {},
           `types:
   - looped:
+      tags: [view_type]
       fields:
         - other:
             type: looped
 `,
-          undefined,
         ),
       /cyclic view reference: looped/,
     );
@@ -361,11 +339,11 @@ types: []
           {},
           `types:
   - broken:
+      tags: [view_type]
       fields:
         - other:
             type: missing_view
 `,
-          undefined,
         ),
       /unknown view: missing_view/,
     );
@@ -378,12 +356,17 @@ types: []
           {},
           `types:
   - looped:
+      tags: [view_type]
       one_of:
         - looped
 `,
-          undefined,
         ),
       /cyclic view reference: looped/,
     );
+  });
+
+  it("covers a simple view without datasource types", async () => {
+    const card = await bodyOf("cardPaymentTests.rs", {}, SIMPLE_TYPES);
+    assert.match(card, /fn sample\(\) -> CardPayment \{/);
   });
 });

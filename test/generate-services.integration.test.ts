@@ -4,33 +4,42 @@ import { memoryReader } from "@deterministic-code/generators-common/deterministi
 import type { GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import { generate } from "../src/generate-services.ts";
 
-const DS_YAML = `types:
+const TYPES = `types:
   - user:
+      tags: [datasource_type, view_type]
+      inherits: set
       fields:
         - email:
             type: string
-            is_unique: true
             size: 256
         - role_id:
             type: number
             references: role.id
   - role:
-      datasource_type: readonly-lookup
+      tags: [datasource_type, view_type, readonly_lookup]
+      inherits: set
       fields:
         - name:
             type: string
+`;
+
+const DATASOURCE = `includes:
+  - types:
+      filter: tag == "datasource_type"
+types:
+  - user:
+      fields:
+        - email:
+            is_unique: true
+  - role:
+      fields:
+        - name:
             is_unique: true
 `;
 
-const VIEW_YAML = `includes:
-  - datasource_types:
-      include: "*"
-types: []
-`;
-
 const SERVICES_YAML = `includes:
-  - view_type_services:
-      filter: 'type is view_type'
+  - types:
+      filter: tag == "view_type"
 services:
   - name: ReportService
 `;
@@ -40,12 +49,12 @@ const ROUTES_YAML = `routes:
       method: GET
       path: /api/report
       service: ReportService
-      serviceMethod: run
+      function: run
   - health:
       method: GET
       path: /api/health
       service: HealthCheckService
-      serviceMethod: check
+      function: check
 `;
 
 const fixtureReader = (files: Record<string, string>) => memoryReader(files);
@@ -61,8 +70,8 @@ describe("generate-services", () => {
   it("emits generic DynamicService facade, custom stubs, and health check body", async () => {
     const entries = await generate({
       reader: fixtureReader({
-        "datasource_types.yaml": DS_YAML,
-        "view_types.yaml": VIEW_YAML,
+        "types.yaml": TYPES,
+        "datasource.yaml": DATASOURCE,
         "services.yaml": SERVICES_YAML,
         "routes.yaml": ROUTES_YAML,
       }),
@@ -75,7 +84,8 @@ describe("generate-services", () => {
     assert.ok(paths.includes("userService.rs"), `got: ${paths.join(", ")}`);
     assert.ok(paths.includes("roleService.rs"));
     assert.ok(paths.includes("../custom/reportService.rs"));
-    assert.ok(paths.includes("../custom/health-check-service.rs"));
+    const healthPath = paths.find((p) => /health/i.test(p));
+    assert.ok(healthPath, `health stub missing; got: ${paths.join(", ")}`);
 
     const user = textOf(entries, "userService.rs");
     assert.match(user, /pub struct UserService/);
@@ -91,7 +101,7 @@ describe("generate-services", () => {
     assert.match(report, /Ok\(serde_json::json!\(\{\}\)\)/);
     assert.match(report, /"run" => self\.run\(args\)\.await/);
 
-    const health = textOf(entries, "../custom/health-check-service.rs");
+    const health = textOf(entries, healthPath);
     assert.match(health, /use serde_json::\{json, Value\};/);
     assert.match(health, /async fn check\(&self, _args: Value\)/);
     assert.match(health, /Ok\(json!\(\{ "status": "ok" \}\)\)/);
@@ -102,8 +112,7 @@ describe("generate-services", () => {
       () =>
         generate({
           reader: fixtureReader({
-            "datasource_types.yaml": DS_YAML,
-            "view_types.yaml": VIEW_YAML,
+            "types.yaml": TYPES,
           }),
           settings: {},
         }),
