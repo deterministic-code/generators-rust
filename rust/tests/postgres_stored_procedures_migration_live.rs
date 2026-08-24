@@ -61,7 +61,7 @@ async fn migrate_up_applies_0002_and_procedures_are_callable() {
 
     let ds = open_datasource(&url).await;
 
-    // id_type: uuid → the pk IS the uuid, so create_member takes no separate uuid param.
+    // The pk IS the uuid, so create_member takes no separate uuid param.
     let created = ds
         .query(
             "SELECT create_member($1, $2, $3, now(), now()) AS id",

@@ -139,20 +139,6 @@ describe("generate datasource types tests", () => {
     assert.match(user, /nick_name: Some\(String::from\("sample"\)\)/);
   });
 
-  it("uses uuid ids when datasource.id_type=uuid", async () => {
-    const user = await userBody({ "datasource.id_type": "uuid" });
-    assert.match(user, /fn gets_id\(/);
-    assert.match(user, /fn sets_id\(/);
-    assert.match(user, /let initial = String::from\("00000000-0000-0000-0000-000000000000"\);/);
-  });
-
-  it("uses i64 ids when datasource.id_type=biginteger", async () => {
-    const user = await userBody({ "datasource.id_type": "biginteger" });
-    assert.match(user, /id: 1i64,/);
-    assert.match(user, /let next = 2i64;/);
-    assert.match(user, /fn sample\(\) -> User \{/);
-  });
-
   it("writes codegen.schema_version into the file header", async () => {
     const user = await userBody({ "codegen.schema_version": "9.9" });
     assert.match(user, /schema-version: 9.9/);
