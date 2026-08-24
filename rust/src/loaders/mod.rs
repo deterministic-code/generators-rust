@@ -20,8 +20,8 @@ pub use routes::{
 };
 pub use services::{load_services, parse_arg, parse_services, ArgSpec, ServiceSpec, ServicesError};
 pub use settings::{
-    load_settings_config, parse_settings_config, DatasourceSettings, DatetimeRepr, SettingsConfig,
-    SettingsConfigError, UuidRepr,
+    load_settings_config, parse_settings_config, DatasourceSettings, SettingsConfig,
+    SettingsConfigError,
 };
 pub use view_types::{
     load_view_types, parse_view_types, DatasourceInclusion, ViewFieldDef, ViewTypeDef,

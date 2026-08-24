@@ -152,18 +152,6 @@ routes: []
     assert.match(users, /header\("if-match", "2020-01-01T00:00:00.000Z"\)/);
   });
 
-  it("uses a uuid missing id when datasource.id_type is uuid", async () => {
-    const entries = await generate({
-      reader: memoryReader(yaml),
-      settings: { "datasource.id_type": "uuid" },
-    });
-    const users = textOf(entries, "usersTests.rs");
-    assert.match(
-      users,
-      /uri\("\/api\/users\/00000000-0000-0000-0000-000000000000"\)/,
-    );
-  });
-
   it("nests tests under features/ when organize_by_feature is true", async () => {
     const entries = await generate({
       reader: memoryReader({

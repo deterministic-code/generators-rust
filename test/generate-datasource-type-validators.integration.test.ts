@@ -111,11 +111,6 @@ describe("generate datasource type validators", () => {
     assert.doesNotMatch(user, /nick_name/);
   });
 
-  it("uses uuid id checks when datasource.id_type=uuid", async () => {
-    const user = await userBody({ "datasource.id_type": "uuid" });
-    assert.match(user, /obj\.id\.to_string\(\)/);
-  });
-
   it("writes codegen.schema_version into the file header", async () => {
     const user = await userBody({ "codegen.schema_version": "9.9" });
     assert.match(user, /schema-version: 9.9/);

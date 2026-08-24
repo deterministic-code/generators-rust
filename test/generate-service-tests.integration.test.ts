@@ -88,19 +88,6 @@ describe("generate-service-tests", () => {
     assert.deepEqual(entries, []);
   });
 
-  it("uses a uuid missing id when datasource.id_type is uuid", async () => {
-    const entries = await generate({
-      reader: memoryReader(yaml),
-      settings: { "datasource.id_type": "uuid" },
-    });
-    const user = textOf(entries, "userServiceTests.rs");
-    assert.match(
-      user,
-      /json!\("00000000-0000-0000-0000-000000000000"\)/,
-    );
-    assert.doesNotMatch(user, /json!\(99999\)/);
-  });
-
   it("nests tests under features/ when organize_by_feature is true", async () => {
     const entries = await generate({
       reader: memoryReader(yaml),

@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-/// The representation of an entity's primary key, resolved from `settings.datasource.id_type`.
+/// The representation of an entity's primary key, taken from the PK field's type.
 /// A `Uuid` implicit id is generated client-side on insert (no auto-increment to read back);
 /// `String` requires a caller-supplied id; `Integer` is a DB auto-increment.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -12,9 +12,9 @@ pub enum IdType {
 }
 
 impl IdType {
-    /// Resolve from the `settings.datasource.id_type` string. `biginteger`/`smallinteger`/absent
-    /// collapse to `Integer` — only `uuid` and `string` change insert/parse behavior.
-    pub fn from_settings_str(raw: &str) -> Self {
+    /// Resolve from a PK field type. `biginteger`/`smallinteger`/absent collapse to `Integer` —
+    /// only `uuid` and `string` change insert/parse behavior.
+    pub fn from_field_type(raw: &str) -> Self {
         match raw.trim().to_ascii_lowercase().as_str() {
             "uuid" => IdType::Uuid,
             "string" => IdType::String,
@@ -79,14 +79,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn from_settings_str_maps_representations() {
-        assert_eq!(IdType::from_settings_str("uuid"), IdType::Uuid);
-        assert_eq!(IdType::from_settings_str("UUID"), IdType::Uuid);
-        assert_eq!(IdType::from_settings_str("string"), IdType::String);
-        assert_eq!(IdType::from_settings_str("integer"), IdType::Integer);
-        assert_eq!(IdType::from_settings_str("biginteger"), IdType::Integer);
-        assert_eq!(IdType::from_settings_str(""), IdType::Integer);
-        assert_eq!(IdType::from_settings_str("nonsense"), IdType::Integer);
+    fn from_field_type_maps_representations() {
+        assert_eq!(IdType::from_field_type("uuid"), IdType::Uuid);
+        assert_eq!(IdType::from_field_type("UUID"), IdType::Uuid);
+        assert_eq!(IdType::from_field_type("string"), IdType::String);
+        assert_eq!(IdType::from_field_type("integer"), IdType::Integer);
+        assert_eq!(IdType::from_field_type("biginteger"), IdType::Integer);
+        assert_eq!(IdType::from_field_type(""), IdType::Integer);
+        assert_eq!(IdType::from_field_type("nonsense"), IdType::Integer);
     }
 
     #[test]

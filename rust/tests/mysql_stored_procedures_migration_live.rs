@@ -29,7 +29,7 @@ async fn open_datasource(url: &str) -> Arc<MysqlDatasource> {
     Arc::new(ds)
 }
 
-/// The emitted `migrate-up` binary must apply BOTH `0001_initial` and the GO-separated `0002_stored_procedures` from the real social-messaging sample on mysql, and the procedures must be callable via `CALL`. For `id_type: uuid` the create procedure generates the pk in-proc (mysql has no RETURNING and there is no system `uuid` column), which this test exercises through `create_member` + `find_member_by_handle`.
+/// The emitted `migrate-up` binary must apply BOTH `0001_initial` and the GO-separated `0002_stored_procedures` from the real social-messaging sample on mysql, and the procedures must be callable via `CALL`. For a uuid pk the create procedure generates the pk in-proc (mysql has no RETURNING and there is no system `uuid` column), which this test exercises through `create_member` + `find_member_by_handle`.
 #[tokio::test]
 async fn migrate_up_applies_0002_and_procedures_are_callable() {
     if docker_disabled() {

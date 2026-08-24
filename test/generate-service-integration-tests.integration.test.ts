@@ -113,23 +113,6 @@ describe("generate-service-integration-tests", () => {
     assert.deepEqual(entries, []);
   });
 
-  it("uses a uuid missing id when datasource.id_type is uuid", async () => {
-    const entries = await generate({
-      reader: memoryReader(yaml),
-      settings: { "datasource.id_type": "uuid" },
-    });
-    const body = textOf(entries, "userRoleServiceIntegrationTests.rs");
-    assert.match(
-      body,
-      /fn add_inserts_a_row_and_auto_populates_id_created_updated/,
-    );
-    assert.doesNotMatch(body, /row\.get\("uuid"\)/);
-    assert.match(
-      body,
-      /json!\("00000000-0000-0000-0000-000000000000"\)/,
-    );
-  });
-
   it("nests tests under features/ when organize_by_feature is true", async () => {
     const entries = await generate({
       reader: memoryReader(yaml),

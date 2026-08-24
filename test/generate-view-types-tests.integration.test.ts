@@ -303,18 +303,6 @@ describe("generate view types tests", () => {
     assert.match(card, /schema-version: 9.9/);
   });
 
-  it("uses uuid ids when datasource.id_type=uuid", async () => {
-    const user = await bodyOf("userTests.rs", { "datasource.id_type": "uuid" });
-    assert.match(user, /id: String::from\("00000000-0000-0000-0000-000000000000"\)/);
-  });
-
-  it("uses i64 ids when datasource.id_type=biginteger", async () => {
-    const user = await bodyOf("userTests.rs", {
-      "datasource.id_type": "biginteger",
-    });
-    assert.match(user, /id: 1i64,/);
-  });
-
   it("rejects a cyclic view reference", async () => {
     await assert.rejects(
       () =>

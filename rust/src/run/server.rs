@@ -270,7 +270,7 @@ fn build_service_registry(
             entity_map.as_ref(),
             datasource_chain,
             &column_datasource_types,
-            settings.datasource.id_type,
+            entity_id_type(entity),
         )?;
         let use_occ =
             entity.uses_optimistic_concurrency(settings.datasource.use_optimistic_concurrency);
@@ -446,15 +446,14 @@ pub(crate) fn resolve_entity_persistence(
     let entity_map = mapping.map(entity_field_map_from_mapping);
     // why logical keys: converter dispatch happens after to_logical_row, so the map is keyed on the YAML field name, not the renamed physical column.
     // why resolve `reference`: a typeless FK whose parent has no explicit PK stays the `reference`
-    // sentinel (the loader can only inherit an explicit parent PK type) — its column is the parent's
-    // synthetic id, so it carries the settings id type and needs that converter's cast on insert.
-    let id_ds_type = settings.datasource.id_type.datasource_type_str();
+    // sentinel (the loader can only inherit an explicit parent PK type) — implicit `id` is integer.
+    let id_type = entity_id_type(entity);
     let mut column_datasource_types: BTreeMap<String, String> = entity
         .fields
         .iter()
         .map(|f| {
             let ds_type = if f.r#type == "reference" {
-                id_ds_type.to_string()
+                "number".to_string()
             } else {
                 f.r#type.clone()
             };
@@ -462,20 +461,24 @@ pub(crate) fn resolve_entity_persistence(
         })
         .collect();
     // A client-supplied id has no declared field, so register the synthetic primary key with the
-    // settings-derived id type — otherwise its bind gets no converter cast and postgres rejects
-    // text→uuid on insert. DB-assigned ids are never bound, so the owner keeps them out.
-    if settings.datasource.id_type.is_client_supplied() {
+    // PK field type — otherwise its bind gets no converter cast and postgres rejects text→uuid
+    // on insert. DB-assigned ids are never bound, so the owner keeps them out.
+    if id_type.is_client_supplied() {
         column_datasource_types
             .entry(primary_key.clone())
-            .or_insert_with(|| {
-                settings
-                    .datasource
-                    .id_type
-                    .datasource_type_str()
-                    .to_string()
-            });
+            .or_insert_with(|| id_type.datasource_type_str().to_string());
     }
     (table, primary_key, entity_map, column_datasource_types)
+}
+
+fn entity_id_type(entity: &DatasourceTypeDef) -> IdType {
+    entity
+        .fields
+        .iter()
+        .find(|f| f.primary_key)
+        .or_else(|| entity.fields.iter().find(|f| f.name == "id"))
+        .map(|f| IdType::from_field_type(&f.r#type))
+        .unwrap_or_default()
 }
 
 fn make_service_factory(
@@ -491,7 +494,7 @@ fn make_service_factory(
         resolve_entity_persistence(entity, datasource_mappings, settings);
     let dialect = dialect.clone();
     let middlewares = datasource_chain.to_vec();
-    let id_type = settings.datasource.id_type;
+    let id_type = entity_id_type(entity);
     let use_occ =
         entity.uses_optimistic_concurrency(settings.datasource.use_optimistic_concurrency);
     Arc::new(move |txn_ds: Arc<dyn Datasource>| {
@@ -607,7 +610,7 @@ fn build_runtime_bindings(
                     physical_table,
                     dialect.clone(),
                     datasource_chain.to_vec(),
-                    settings.datasource.id_type,
+                    IdType::Integer,
                 ))
             }
             BindingKind::DirectFk { .. } => None,
@@ -776,35 +779,53 @@ mod tests {
         }
     }
 
-    fn persistence_for(id_type_yaml: &str) -> BTreeMap<String, String> {
-        let settings = crate::loaders::settings::parse_settings_config(&format!(
-            "settings:\n  datasource:\n    id_type: {id_type_yaml}\n"
-        ))
+    fn persistence_for(entity: &DatasourceTypeDef) -> BTreeMap<String, String> {
+        let settings = crate::loaders::settings::parse_settings_config(
+            "settings:\n  datasource: {}\n",
+        )
         .unwrap();
         let (_table, _pk, _map, column_types) =
-            resolve_entity_persistence(&member_like_entity(), &[], &settings);
+            resolve_entity_persistence(entity, &[], &settings);
         column_types
     }
 
+    fn entity_with_id(id_type: &str) -> DatasourceTypeDef {
+        let mut entity = member_like_entity();
+        entity.fields.insert(
+            0,
+            FieldDef {
+                name: "id".to_string(),
+                r#type: id_type.to_string(),
+                primary_key: true,
+                ..Default::default()
+            },
+        );
+        entity
+    }
+
     #[test]
-    fn synthetic_uuid_pk_registers_uuid_column_type_so_postgres_gets_its_cast() {
+    fn authored_uuid_pk_registers_uuid_column_type_so_postgres_gets_its_cast() {
         assert_eq!(
-            persistence_for("uuid").get("id").map(String::as_str),
+            persistence_for(&entity_with_id("uuid"))
+                .get("id")
+                .map(String::as_str),
             Some("uuid"),
         );
     }
 
     #[test]
-    fn synthetic_string_pk_registers_string_column_type() {
+    fn authored_string_pk_registers_string_column_type() {
         assert_eq!(
-            persistence_for("string").get("id").map(String::as_str),
+            persistence_for(&entity_with_id("string"))
+                .get("id")
+                .map(String::as_str),
             Some("string"),
         );
     }
 
     #[test]
-    fn synthetic_integer_pk_stays_unregistered_db_assigns_it() {
-        assert!(!persistence_for("integer").contains_key("id"));
+    fn implicit_integer_pk_stays_unregistered_db_assigns_it() {
+        assert!(!persistence_for(&member_like_entity()).contains_key("id"));
     }
 
     fn conversation_like_entity() -> DatasourceTypeDef {
@@ -820,23 +841,14 @@ mod tests {
         }
     }
 
-    fn fk_type_for(id_type_yaml: &str) -> Option<String> {
-        let settings = crate::loaders::settings::parse_settings_config(&format!(
-            "settings:\n  datasource:\n    id_type: {id_type_yaml}\n"
-        ))
+    #[test]
+    fn typeless_fk_to_implicit_id_carries_number() {
+        let settings = crate::loaders::settings::parse_settings_config(
+            "settings:\n  datasource: {}\n",
+        )
         .unwrap();
         let (_table, _pk, _map, column_types) =
             resolve_entity_persistence(&conversation_like_entity(), &[], &settings);
-        column_types.get("created_by").cloned()
-    }
-
-    #[test]
-    fn typeless_fk_to_synthetic_uuid_pk_carries_uuid_so_postgres_casts_the_insert_bind() {
-        assert_eq!(fk_type_for("uuid").as_deref(), Some("uuid"));
-    }
-
-    #[test]
-    fn typeless_fk_to_synthetic_integer_pk_carries_number() {
-        assert_eq!(fk_type_for("integer").as_deref(), Some("number"));
+        assert_eq!(column_types.get("created_by").map(String::as_str), Some("number"));
     }
 }
