@@ -2,6 +2,7 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
+  columnFields,
   datasourceTypesOf,
   tableKind,
 } from "@deterministic-code/generators-common/spec-types";
@@ -29,7 +30,7 @@ class Generator extends Emit {
   }
 
   private type(table: Type): GenerateEntry {
-    const fields = table.fields;
+    const fields = columnFields(table.fields);
     const structName = this.casing.convertTypes(table.name);
     return content(
       this.imports.datasource(table.name),
