@@ -6,7 +6,7 @@ use deterministic::repositories::sqlite::{
     SqliteRepository, SqliteStandardRepository,
 };
 use deterministic::{CrudRepository, Datasource, IdType, Repository, RepositoryError, RowMap};
-use serde_json::Value;
+use serde_json::{json, Value};
 use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
 use std::collections::BTreeMap;
@@ -128,6 +128,42 @@ async fn sqlite_crud_repository_add_translates_custom_pk_through_field_mapping()
     assert_eq!(added.get("key").unwrap().as_str(), Some("sample-0"));
     assert_eq!(added.get("first_name").unwrap().as_str(), Some("Alice"));
     assert!(added.get("CntID").is_none(), "physical name must not leak");
+}
+
+#[tokio::test]
+async fn sqlite_crud_repository_find_update_delete_composite_identity() {
+    let ds = open_in_memory().await;
+    ds.query(
+        "CREATE TABLE links (left_id INTEGER NOT NULL, right_id INTEGER NOT NULL, label TEXT NOT NULL, PRIMARY KEY (left_id, right_id))",
+        &[],
+    )
+    .await
+    .expect("create links");
+
+    let repo = SqliteCrudRepository::new(Arc::clone(&ds), "links")
+        .unwrap()
+        .with_primary_keys(["left_id", "right_id"])
+        .unwrap();
+
+    let mut data = RowMap::new();
+    data.insert("left_id".to_string(), Value::from(1i64));
+    data.insert("right_id".to_string(), Value::from(2i64));
+    data.insert("label".to_string(), Value::from("ab"));
+    let added = repo.add(data).await.expect("add link");
+    assert_eq!(added.get("left_id").unwrap(), &Value::from(1i64));
+    assert_eq!(added.get("right_id").unwrap(), &Value::from(2i64));
+
+    let id = json!({ "left_id": 1, "right_id": 2 });
+    let found = repo.find(&id).await.expect("find").expect("row");
+    assert_eq!(found.get("label").unwrap().as_str(), Some("ab"));
+
+    let mut patch = RowMap::new();
+    patch.insert("label".to_string(), Value::from("changed"));
+    let updated = repo.update(&id, patch).await.expect("update").expect("row");
+    assert_eq!(updated.get("label").unwrap().as_str(), Some("changed"));
+
+    assert!(repo.delete(&id).await.expect("delete"));
+    assert!(repo.find(&id).await.expect("find after delete").is_none());
 }
 
 #[tokio::test]

@@ -31,6 +31,7 @@ pub struct DatasourceTypeDef {
     pub target: Option<String>,
     pub fields: Vec<FieldDef>,
     pub seeds: Vec<SeedRow>,
+    pub ids: Vec<String>,
 }
 
 impl DatasourceTypeDef {
@@ -111,6 +112,8 @@ struct RawEntityBody {
     fields: Vec<YamlValue>,
     #[serde(default)]
     seeds: Vec<YamlValue>,
+    #[serde(default)]
+    ids: Vec<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -164,6 +167,7 @@ fn parse_entity(raw: YamlValue) -> Result<DatasourceTypeDef, DatasourceTypesErro
         target: parsed.target,
         fields,
         seeds,
+        ids: parsed.ids,
     })
 }
 

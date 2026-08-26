@@ -262,11 +262,11 @@ fn build_service_registry(
         if entity.target.as_deref() == Some("None") {
             continue;
         }
-        let (table, primary_key, entity_map, column_datasource_types) =
+        let (table, primary_keys, entity_map, column_datasource_types) =
             resolve_entity_persistence(entity, datasource_mappings, settings);
         let repo = datasource.build_crud_repo_with_mapping(
             &table,
-            &primary_key,
+            &primary_keys,
             entity_map.as_ref(),
             datasource_chain,
             &column_datasource_types,
@@ -336,8 +336,12 @@ fn build_service_registry(
                     datasource_chain,
                     auto_enrich,
                 )?;
-                let (_, parent_pk, _, _) =
+                let (_, parent_keys, _, _) =
                     resolve_entity_persistence(entity, datasource_mappings, settings);
+                let parent_pk = parent_keys
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "id".to_string());
                 let parent_factory = make_service_factory(
                     entity,
                     datasource_mappings,
@@ -371,8 +375,12 @@ fn build_service_registry(
                     datasource_chain,
                     auto_enrich,
                 )?;
-                let (_, parent_pk, _, _) =
+                let (_, parent_keys, _, _) =
                     resolve_entity_persistence(entity, datasource_mappings, settings);
+                let parent_pk = parent_keys
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "id".to_string());
                 Arc::new(EagerChildReadingService::new(
                     wrapped,
                     datasource.as_datasource(),
@@ -425,7 +433,7 @@ pub(crate) fn resolve_entity_persistence(
     settings: &SettingsConfig,
 ) -> (
     String,
-    String,
+    Vec<String>,
     Option<EntityFieldMap>,
     BTreeMap<String, String>,
 ) {
@@ -437,11 +445,10 @@ pub(crate) fn resolve_entity_persistence(
         }
         _ => entity.name.clone(),
     };
-    let primary_key = entity
-        .fields
-        .iter()
-        .find(|f| f.primary_key)
-        .map(|f| f.name.clone())
+    let primary_keys = entity_identity_columns(entity);
+    let primary_key = primary_keys
+        .first()
+        .cloned()
         .unwrap_or_else(|| "id".to_string());
     let entity_map = mapping.map(entity_field_map_from_mapping);
     // why logical keys: converter dispatch happens after to_logical_row, so the map is keyed on the YAML field name, not the renamed physical column.
@@ -468,7 +475,17 @@ pub(crate) fn resolve_entity_persistence(
             .entry(primary_key.clone())
             .or_insert_with(|| id_type.datasource_type_str().to_string());
     }
-    (table, primary_key, entity_map, column_datasource_types)
+    (table, primary_keys, entity_map, column_datasource_types)
+}
+
+pub(crate) fn entity_identity_columns(entity: &DatasourceTypeDef) -> Vec<String> {
+    if !entity.ids.is_empty() {
+        return entity.ids.clone();
+    }
+    if let Some(field) = entity.fields.iter().find(|f| f.primary_key) {
+        return vec![field.name.clone()];
+    }
+    vec!["id".to_string()]
 }
 
 fn entity_id_type(entity: &DatasourceTypeDef) -> IdType {
@@ -532,11 +549,12 @@ fn make_junction_repo_factory(
     id_type: IdType,
 ) -> CrudRepoFactory {
     Arc::new(move |txn_ds: Arc<dyn Datasource>| {
+        let keys = vec!["id".to_string()];
         build_crud_repo_for_datasource(
             dialect.clone(),
             txn_ds,
             &table,
-            "id",
+            &keys,
             None,
             &middlewares,
             &BTreeMap::new(),

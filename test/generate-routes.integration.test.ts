@@ -146,6 +146,39 @@ routes: []
     assert.match(users, /use_optimistic_concurrency: true/);
   });
 
+  it("emits stacked primary_key_params for a composite identity", async () => {
+    const entries = await generate({
+      reader: memoryReader({
+        "types.yaml": `types:
+  - link:
+      tags: [datasource_type, view_type]
+      inherits: set
+      ids: [left_id, right_id]
+      fields:
+        - left_id:
+            type: integer
+        - right_id:
+            type: integer
+`,
+        "datasource.yaml": `includes:
+  - types:
+      filter: tag == "datasource_type"
+`,
+        "routes.yaml": `includes:
+  - types:
+      filter: 'type == "link"'
+routes: []
+`,
+      }),
+      settings: {},
+    });
+    const links = textOf(entries, "links.rs");
+    assert.match(
+      links,
+      /primary_key_params: vec!\["left_id"\.to_string\(\), "right_id"\.to_string\(\)\]/,
+    );
+  });
+
   it("rejects missing routes.yaml", async () => {
     await assert.rejects(
       () =>

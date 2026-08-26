@@ -156,6 +156,7 @@ fn make_router(svc: Arc<MapService>, opts: BuildCfg) -> Router {
         parent_id_type: IdType::Integer,
         child_id_type: IdType::Integer,
         child_primary_key_param: None,
+        child_primary_key_params: vec![],
         use_optimistic_concurrency: opts.use_optimistic_concurrency,
         create_validator: opts.create_validator,
         update_validator: opts.update_validator,

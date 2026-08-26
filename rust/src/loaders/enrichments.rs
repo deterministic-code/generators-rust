@@ -105,6 +105,7 @@ mod tests {
             target: Some("Crud".to_string()),
             fields,
             seeds: Vec::new(),
+            ids: Vec::new(),
         }
     }
 

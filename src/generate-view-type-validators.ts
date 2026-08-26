@@ -4,7 +4,6 @@ import { content, type GenerateEntry } from "@deterministic-code/generators-comm
 import {
   authoredViewTypesOf,
   datasourceTypesOf,
-  unionMembers,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
 import {
@@ -105,26 +104,6 @@ class Generator extends Emit {
   private view(view: Type, expanded: Type | undefined): GenerateEntry {
     const fnName = this.casing.convertFields(`validate_${view.name}`);
     const path = this.imports.viewValidator(view.name);
-    const members = unionMembers(view);
-    if (members !== undefined) {
-      const cls = this.typePath(view.name, "view");
-      return content(
-        path,
-        fill(typeTmpl, {
-          schemaVersion: this.settings.schemaVersion,
-          isUnion: true,
-          isShaped: false,
-          fnName,
-          typePath: cls,
-          arms: members.map((m) => ({
-            arm: `${cls}::${this.casing.convertTypes(m)}(inner) => ${this.validatorFn(m, "view")}(inner),`,
-          })),
-          paramName: "obj",
-          hasChecks: false,
-          checks: [],
-        }),
-      );
-    }
     const checks = this.shapedBody(view, expanded);
     return content(
       path,

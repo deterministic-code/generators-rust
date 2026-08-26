@@ -7,7 +7,6 @@ import { convertSpecType } from "../base-type-converter.ts";
 import type { PackCasing } from "./default-casing.ts";
 import type { RustImportGenerator } from "../import-generator.ts";
 import type { Type, TypeField } from "../specification-parser.ts";
-import { unionMembers } from "@deterministic-code/generators-common/spec-types";
 import { fieldRefKind } from "./view-shape.ts";
 
 export type ViewTestOpts = {
@@ -122,12 +121,6 @@ export const viewExpr = (
     throw new Error(`unknown view: ${name}`);
   }
   const next = new Set(visited).add(name);
-  const members = unionMembers(view);
-  if (members !== undefined) {
-    const member = members[0];
-    if (member === undefined) return `${opts.imports.viewQual(name)} {}`;
-    return `${opts.imports.viewQual(name)}::${opts.casing.convertTypes(member)}(${viewExpr(member, opts, next)})`;
-  }
   if (isAlias(view)) {
     return renderDs(view.name, opts);
   }

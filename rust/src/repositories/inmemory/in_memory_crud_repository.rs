@@ -13,6 +13,7 @@ use crate::util::now_iso;
 pub struct InMemoryCrudRepository {
     state: Mutex<State>,
     has_standard_columns: bool,
+    primary_keys: Vec<String>,
 }
 
 #[derive(Debug, Default)]
@@ -29,6 +30,7 @@ impl InMemoryCrudRepository {
                 next_id: 1,
             }),
             has_standard_columns: true,
+            primary_keys: vec!["id".to_string()],
         }
     }
 
@@ -39,7 +41,17 @@ impl InMemoryCrudRepository {
                 next_id: 1,
             }),
             has_standard_columns,
+            primary_keys: vec!["id".to_string()],
         }
+    }
+
+    pub fn with_primary_keys<I, S>(mut self, columns: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.primary_keys = columns.into_iter().map(Into::into).collect();
+        self
     }
 }
 
@@ -53,6 +65,16 @@ fn row_id(row: &RowMap) -> Option<i64> {
     row.get("id").and_then(|v| v.as_i64())
 }
 
+fn row_matches(row: &RowMap, id: &Value, columns: &[String]) -> bool {
+    if let Some(obj) = id.as_object() {
+        return columns.iter().all(|c| row.get(c) == obj.get(c));
+    }
+    if columns.len() == 1 {
+        return row.get(columns[0].as_str()) == Some(id);
+    }
+    false
+}
+
 #[async_trait]
 impl Repository for InMemoryCrudRepository {
     async fn query(&self, _sql: &str, _params: &[Value]) -> Result<Vec<RowMap>, RepositoryError> {
@@ -64,10 +86,21 @@ impl Repository for InMemoryCrudRepository {
 
 #[async_trait]
 impl CrudRepository for InMemoryCrudRepository {
+    fn primary_key_column(&self) -> &str {
+        self.primary_keys.first().map(String::as_str).unwrap_or("id")
+    }
+
+    fn primary_key_columns(&self) -> Vec<String> {
+        self.primary_keys.clone()
+    }
+
     async fn find(&self, id: &Value) -> Result<Option<RowMap>, RepositoryError> {
-        let target = id.as_i64();
         let state = self.state.lock().unwrap();
-        Ok(state.rows.iter().find(|r| row_id(r) == target).cloned())
+        Ok(state
+            .rows
+            .iter()
+            .find(|r| row_matches(r, id, &self.primary_keys))
+            .cloned())
     }
 
     async fn find_all(&self) -> Result<Vec<RowMap>, RepositoryError> {
@@ -90,6 +123,15 @@ impl CrudRepository for InMemoryCrudRepository {
     }
 
     async fn add(&self, data: RowMap) -> Result<RowMap, RepositoryError> {
+        if self.primary_keys.len() > 1 {
+            for column in &self.primary_keys {
+                if !data.contains_key(column) {
+                    return Err(RepositoryError::Other(format!(
+                        "missing identity key '{column}'"
+                    )));
+                }
+            }
+        }
         let mut state = self.state.lock().unwrap();
         let id = state.next_id;
         state.next_id += 1;
@@ -103,15 +145,19 @@ impl CrudRepository for InMemoryCrudRepository {
         for (k, v) in data {
             row.insert(k, v);
         }
-        row.insert("id".to_string(), Value::from(id));
+        if self.primary_keys.len() <= 1 && self.primary_key_column() == "id" {
+            row.insert("id".to_string(), Value::from(id));
+        }
         state.rows.push(row.clone());
         Ok(row)
     }
 
     async fn update(&self, id: &Value, data: RowMap) -> Result<Option<RowMap>, RepositoryError> {
-        let target = id.as_i64();
         let mut state = self.state.lock().unwrap();
-        let idx = state.rows.iter().position(|r| row_id(r) == target);
+        let idx = state
+            .rows
+            .iter()
+            .position(|r| row_matches(r, id, &self.primary_keys));
         let Some(idx) = idx else {
             return Ok(None);
         };
@@ -125,9 +171,11 @@ impl CrudRepository for InMemoryCrudRepository {
     }
 
     async fn delete(&self, id: &Value) -> Result<bool, RepositoryError> {
-        let target = id.as_i64();
         let mut state = self.state.lock().unwrap();
-        let idx = state.rows.iter().position(|r| row_id(r) == target);
+        let idx = state
+            .rows
+            .iter()
+            .position(|r| row_matches(r, id, &self.primary_keys));
         let Some(idx) = idx else {
             return Ok(false);
         };

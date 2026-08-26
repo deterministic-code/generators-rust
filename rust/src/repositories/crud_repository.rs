@@ -69,4 +69,43 @@ pub trait CrudRepository: Repository {
     fn primary_key_column(&self) -> &str {
         "id"
     }
+
+    fn primary_key_columns(&self) -> Vec<String> {
+        vec![self.primary_key_column().to_string()]
+    }
+}
+
+/// Address a row by the full identity: a scalar for one column, or a named object.
+pub fn identity_from_row(row: &RowMap, columns: &[String]) -> Value {
+    if columns.len() <= 1 {
+        let column = columns.first().map(String::as_str).unwrap_or("id");
+        return row.get(column).cloned().unwrap_or(Value::Null);
+    }
+    let mut obj = serde_json::Map::new();
+    for column in columns {
+        if let Some(value) = row.get(column) {
+            obj.insert(column.clone(), value.clone());
+        }
+    }
+    Value::Object(obj)
+}
+
+/// Bind a scalar id or a JSON object of identity columns, in `columns` order.
+pub fn bind_identity(id: &Value, columns: &[String]) -> Result<Vec<Value>, RepositoryError> {
+    if let Some(obj) = id.as_object() {
+        let mut out = Vec::with_capacity(columns.len());
+        for column in columns {
+            let value = obj.get(column).cloned().ok_or_else(|| {
+                RepositoryError::Other(format!("missing identity key '{column}'"))
+            })?;
+            out.push(value);
+        }
+        return Ok(out);
+    }
+    if columns.len() == 1 {
+        return Ok(vec![id.clone()]);
+    }
+    Err(RepositoryError::Other(
+        "composite identity requires a named object".into(),
+    ))
 }

@@ -25,7 +25,6 @@ export type {
 export type { IDeterministicReader } from "@deterministic-code/generators-common/deterministic-reader";
 export {
   DATASOURCE_SEEDS_YAML,
-  DATASOURCE_YAML,
   primaryKeyColumn,
   ROUTES_YAML,
   SERVICES_YAML,

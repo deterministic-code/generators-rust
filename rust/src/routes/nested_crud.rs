@@ -26,6 +26,7 @@ pub struct NestedCrudRouterConfig {
     pub parent_id_type: IdType,
     pub child_id_type: IdType,
     pub child_primary_key_param: Option<String>,
+    pub child_primary_key_params: Vec<String>,
     pub use_optimistic_concurrency: bool,
     pub create_validator: Option<ValidatorFn>,
     pub update_validator: Option<ValidatorFn>,
@@ -38,12 +39,24 @@ pub struct NestedCrudRouterConfig {
 
 pub fn create_nested_crud_router(cfg: NestedCrudRouterConfig) -> Router {
     let base = normalize_base(&cfg.base_path);
-    let child_pk = cfg
-        .child_primary_key_param
-        .clone()
-        .unwrap_or_else(|| "id".to_string());
+    let child_pks = if cfg.child_primary_key_params.is_empty() {
+        vec![cfg
+            .child_primary_key_param
+            .clone()
+            .unwrap_or_else(|| "id".to_string())]
+    } else {
+        cfg.child_primary_key_params.clone()
+    };
     let list_path = base.clone();
-    let member_path = format!("{}/{{{}}}", base, child_pk);
+    let member_path = format!(
+        "{}/{}",
+        base,
+        child_pks
+            .iter()
+            .map(|pk| format!("{{{pk}}}"))
+            .collect::<Vec<_>>()
+            .join("/")
+    );
     let state = RouterState {
         service: cfg.service,
         entity_name: Arc::new(cfg.entity_name),
@@ -51,7 +64,8 @@ pub fn create_nested_crud_router(cfg: NestedCrudRouterConfig) -> Router {
         parent_fk_field: Arc::new(cfg.parent_fk_field),
         parent_id_type: cfg.parent_id_type,
         child_id_type: cfg.child_id_type,
-        child_primary_key_param: Arc::new(child_pk),
+        child_primary_key_param: Arc::new(child_pks[0].clone()),
+        child_primary_key_params: Arc::new(child_pks),
         use_optimistic_concurrency: cfg.use_optimistic_concurrency,
         create_validator: cfg.create_validator,
         update_validator: cfg.update_validator,
@@ -82,6 +96,7 @@ struct RouterState {
     parent_id_type: IdType,
     child_id_type: IdType,
     child_primary_key_param: Arc<String>,
+    child_primary_key_params: Arc<Vec<String>>,
     use_optimistic_concurrency: bool,
     create_validator: Option<ValidatorFn>,
     update_validator: Option<ValidatorFn>,
@@ -126,6 +141,39 @@ fn parse_parent_id(state: &RouterState, raw: &str) -> Result<Value, Response> {
 
 fn parse_child_id(state: &RouterState, raw: &str) -> Result<Value, Response> {
     parse_id(state.child_id_type, raw).map_err(validation_error)
+}
+
+fn extract_parent_id(
+    state: &RouterState,
+    params: &std::collections::HashMap<String, String>,
+) -> Result<Value, Response> {
+    let raw = params
+        .get(state.parent_param_name.as_str())
+        .map(String::as_str)
+        .unwrap_or("");
+    parse_parent_id(state, raw)
+}
+
+fn extract_child_id(
+    state: &RouterState,
+    params: &std::collections::HashMap<String, String>,
+) -> Result<Value, Response> {
+    if state.child_primary_key_params.len() <= 1 {
+        let name = state.child_primary_key_param.as_str();
+        let raw = params
+            .get(name)
+            .or_else(|| params.values().next())
+            .map(String::as_str)
+            .unwrap_or("");
+        return parse_child_id(state, raw);
+    }
+    let mut obj = serde_json::Map::new();
+    for name in state.child_primary_key_params.iter() {
+        let raw = params.get(name).map(String::as_str).unwrap_or("");
+        let value = parse_id(state.child_id_type, raw).map_err(validation_error)?;
+        obj.insert(name.clone(), value);
+    }
+    Ok(Value::Object(obj))
 }
 
 fn require_if_match(
@@ -188,14 +236,16 @@ fn coerce_and_wrap(state: &RouterState, mut row: RowMap) -> Value {
 }
 
 fn strip_child_pk(state: &RouterState, body: &mut RowMap) {
-    body.remove(state.child_primary_key_param.as_str());
+    for name in state.child_primary_key_params.iter() {
+        body.remove(name);
+    }
 }
 
 async fn list_handler(
     State(state): State<RouterState>,
-    Path(parent_raw): Path<String>,
+    Path(params): Path<std::collections::HashMap<String, String>>,
 ) -> Response {
-    let parent_id = match parse_parent_id(&state, &parent_raw) {
+    let parent_id = match extract_parent_id(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
@@ -217,13 +267,13 @@ async fn list_handler(
 
 async fn get_by_id_handler(
     State(state): State<RouterState>,
-    Path((parent_raw, child_raw)): Path<(String, String)>,
+    Path(params): Path<std::collections::HashMap<String, String>>,
 ) -> Response {
-    let parent_id = match parse_parent_id(&state, &parent_raw) {
+    let parent_id = match extract_parent_id(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
-    let child_id = match parse_child_id(&state, &child_raw) {
+    let child_id = match extract_child_id(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
@@ -244,10 +294,10 @@ async fn get_by_id_handler(
 
 async fn create_handler(
     State(state): State<RouterState>,
-    Path(parent_raw): Path<String>,
+    Path(params): Path<std::collections::HashMap<String, String>>,
     Json(mut body): Json<RowMap>,
 ) -> Response {
-    let parent_id = match parse_parent_id(&state, &parent_raw) {
+    let parent_id = match extract_parent_id(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
@@ -273,8 +323,7 @@ async fn create_handler(
 async fn mutation_handler(
     state: RouterState,
     method: &str,
-    parent_raw: String,
-    child_raw: String,
+    params: std::collections::HashMap<String, String>,
     headers: HeaderMap,
     mut body: RowMap,
 ) -> Response {
@@ -282,11 +331,11 @@ async fn mutation_handler(
         Ok(v) => v,
         Err(resp) => return resp,
     };
-    let parent_id = match parse_parent_id(&state, &parent_raw) {
+    let parent_id = match extract_parent_id(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
-    let child_id = match parse_child_id(&state, &child_raw) {
+    let child_id = match extract_child_id(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
@@ -325,36 +374,36 @@ async fn mutation_handler(
 
 async fn update_handler(
     State(state): State<RouterState>,
-    Path((parent_raw, child_raw)): Path<(String, String)>,
+    Path(params): Path<std::collections::HashMap<String, String>>,
     headers: HeaderMap,
     Json(body): Json<RowMap>,
 ) -> Response {
-    mutation_handler(state, "PUT", parent_raw, child_raw, headers, body).await
+    mutation_handler(state, "PUT", params, headers, body).await
 }
 
 async fn patch_handler(
     State(state): State<RouterState>,
-    Path((parent_raw, child_raw)): Path<(String, String)>,
+    Path(params): Path<std::collections::HashMap<String, String>>,
     headers: HeaderMap,
     Json(body): Json<RowMap>,
 ) -> Response {
-    mutation_handler(state, "PATCH", parent_raw, child_raw, headers, body).await
+    mutation_handler(state, "PATCH", params, headers, body).await
 }
 
 async fn delete_handler(
     State(state): State<RouterState>,
-    Path((parent_raw, child_raw)): Path<(String, String)>,
+    Path(params): Path<std::collections::HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Response {
     let expected_updated = match require_if_match(&state, "DELETE", &headers) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
-    let parent_id = match parse_parent_id(&state, &parent_raw) {
+    let parent_id = match extract_parent_id(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
-    let child_id = match parse_child_id(&state, &child_raw) {
+    let child_id = match extract_child_id(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
@@ -531,6 +580,7 @@ mod tests {
             parent_id_type: IdType::Integer,
             child_id_type: IdType::Integer,
             child_primary_key_param: Arc::new("id".to_string()),
+            child_primary_key_params: Arc::new(vec!["id".to_string()]),
             use_optimistic_concurrency: occ,
             create_validator: None,
             update_validator: None,

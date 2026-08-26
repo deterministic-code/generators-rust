@@ -5,7 +5,6 @@ import {
   authoredViewTypesOf,
   datasourceTypesOf,
   tableKind,
-  unionMembers,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
 import {
@@ -85,11 +84,9 @@ class Generator extends Emit {
 
   private view(view: Type, expanded: Type | undefined): GenerateEntry {
     const structName = this.casing.convertTypes(view.name);
-    const members = unionMembers(view);
-    const isUnion = members !== undefined;
-    const alias = !isUnion && isAlias(view);
-    const isStruct = !isUnion && !alias;
-    const fields = isUnion ? [] : this.structFields(view, expanded);
+    const alias = isAlias(view);
+    const isStruct = !alias;
+    const fields = this.structFields(view, expanded);
     return content(
       this.imports.view(view.name),
       fill(typeTmpl, {
@@ -97,26 +94,14 @@ class Generator extends Emit {
         simpleDoc: this.settings.simpleDoc,
         descriptionDoc: this.settings.descriptionDoc,
         structName,
-        datasourceType: isUnion
-          ? "standard"
-          : tableKind(view),
-        target: isUnion ? "UnionView" : "ShapedView",
-        fieldCount: String(
-          isUnion ? members.length : isStruct ? fields.length : 0,
-        ),
+        datasourceType: tableKind(view),
+        target: "ShapedView",
+        fieldCount: String(isStruct ? fields.length : 0),
         isAlias: alias,
-        aliasType:
-          !isUnion && isAlias(view)
-            ? this.imports.datasourceQual(view.name)
-            : "",
-        isUnion,
+        aliasType: isAlias(view) ? this.imports.datasourceQual(view.name) : "",
+        isUnion: false,
         isStruct,
-        members: isUnion
-          ? members.map((m) => ({
-              variant: this.casing.convertTypes(m),
-              memberType: this.imports.viewQual(m),
-            }))
-          : [],
+        members: [],
         fields,
       }),
     );

@@ -3,8 +3,8 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
+  identityColumns,
   isReadonlyLookup,
-  pkName,
   tableByName,
 } from "@deterministic-code/generators-common/spec-types";
 import { convertSpecType } from "./base-type-converter.ts";
@@ -205,22 +205,31 @@ const idTypeVariantForPk = (primaryKey: PrimaryKey): string => {
 const inferPrimaryKey = (
   type: Type | undefined,
   table: DatasourceTable | undefined,
-): PrimaryKey => {
-  const column = type !== undefined ? pkName(type, table) : "id";
-  const field = type?.fields.find((f) => f.name === column);
-  const pkType = field?.type ?? "integer";
-  if (column !== "id" && field !== undefined) {
+): PrimaryKey => inferPrimaryKeys(type, table)[0]!;
+
+const inferPrimaryKeys = (
+  type: Type | undefined,
+  table: DatasourceTable | undefined,
+): PrimaryKey[] => {
+  const columns =
+    type !== undefined ? identityColumns(type, table) : ["id"];
+  const names = columns.length > 0 ? columns : ["id"];
+  return names.map((column) => {
+    const field = type?.fields.find((f) => f.name === column);
+    const pkType = field?.type ?? "integer";
+    if (column !== "id" && field !== undefined) {
+      return {
+        column,
+        rustType: field.type === "number" ? "i64" : "String",
+        idType: pkType,
+      };
+    }
     return {
       column,
-      rustType: field.type === "number" ? "i64" : "String",
+      rustType: convertSpecType(field?.type ?? "integer"),
       idType: pkType,
     };
-  }
-  return {
-    column,
-    rustType: convertSpecType(field?.type ?? "integer"),
-    idType: pkType,
-  };
+  });
 };
 
 const sortedDirectFkChildren = (
@@ -352,10 +361,11 @@ class Generator extends Emit {
       entitySnake,
       this.nested,
     );
-    const pk = inferPrimaryKey(
+    const keys = inferPrimaryKeys(
       this.typeOf(entitySnake),
       this.tables.get(entitySnake),
     );
+    const pk = keys[0]!;
     const normalizedByFields = normalizeByFields(candidate.byFields);
     const hasByFields = normalizedByFields.length > 0;
     const directFkChildren = sortedDirectFkChildren(eagerWriteChildren);
@@ -390,6 +400,12 @@ class Generator extends Emit {
       idTypeVariant: idTypeVariantForPk(pk),
       primaryKeyParamExpr:
         pk.column === "id" ? "None" : `Some("${pk.column}".to_string())`,
+      primaryKeyParamsExpr:
+        keys.length > 1
+          ? `vec![${keys
+              .map((k) => `"${k.column}".to_string()`)
+              .join(", ")}]`
+          : "vec![]",
       useOptimisticConcurrency: occ ? "true" : "false",
       coerceRowExpr: hasCoercion
         ? "Some(Arc::new(|row: &mut RowMap| coerce_row_types(row)))"

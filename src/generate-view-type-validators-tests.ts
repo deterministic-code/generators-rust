@@ -4,12 +4,10 @@ import { content, type GenerateEntry } from "@deterministic-code/generators-comm
 import {
   authoredViewTypesOf,
   datasourceTypesOf,
-  unionMembers,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
 import {
   shapedToks,
-  viewExpr,
   type ViewTestOpts,
 } from "./common/view-test-fixtures.ts";
 import {
@@ -71,21 +69,13 @@ class Generator extends Emit implements ViewTestOpts {
 
   private tests(view: Type): GenerateEntry {
     const src = this.imports.view(view.name);
-    const members = unionMembers(view);
     return content(
       this.imports.test(src, view.name),
       fill(typeTestTmpl, {
         schemaVersion: this.settings.schemaVersion,
         typeUse: this.imports.viewQual(view.name),
         fnName: this.casing.convertFields(`validate_${view.name}`),
-        cases:
-          members !== undefined
-            ? members.map((name) => ({
-                ident: this.casing.convertFields(`accepts_${name}_member`),
-                fixture: `${this.casing.convertTypes(view.name)}::${this.casing.convertTypes(name)}(${viewExpr(name, this, new Set([view.name]))})`,
-                assertion: "is_ok()",
-              }))
-            : shapedCases(view, this),
+        cases: shapedCases(view, this),
       }),
     );
   }

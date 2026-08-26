@@ -104,6 +104,7 @@ pub struct CrudRouterConfig {
     pub base_path: String,
     pub id_type: IdType,
     pub primary_key_param: Option<String>,
+    pub primary_key_params: Vec<String>,
     pub use_optimistic_concurrency: bool,
     pub create_validator: Option<ValidatorFn>,
     pub update_validator: Option<ValidatorFn>,
@@ -116,17 +117,29 @@ pub struct CrudRouterConfig {
 
 pub fn create_crud_router(cfg: CrudRouterConfig) -> Router {
     let base = normalize_base(&cfg.base_path);
-    let pk = cfg
-        .primary_key_param
-        .clone()
-        .unwrap_or_else(|| "id".to_string());
+    let pks = if cfg.primary_key_params.is_empty() {
+        vec![cfg
+            .primary_key_param
+            .clone()
+            .unwrap_or_else(|| "id".to_string())]
+    } else {
+        cfg.primary_key_params.clone()
+    };
     let list_path = base.clone();
-    let member_path = format!("{}/{{{}}}", base, pk);
+    let member_path = format!(
+        "{}/{}",
+        base,
+        pks.iter()
+            .map(|pk| format!("{{{pk}}}"))
+            .collect::<Vec<_>>()
+            .join("/")
+    );
     let state = RouterState {
         service: cfg.service,
         entity_name: Arc::new(cfg.entity_name),
         id_type: cfg.id_type,
-        primary_key_param: Arc::new(pk),
+        primary_key_param: Arc::new(pks[0].clone()),
+        primary_key_params: Arc::new(pks),
         use_optimistic_concurrency: cfg.use_optimistic_concurrency,
         create_validator: cfg.create_validator,
         update_validator: cfg.update_validator,
@@ -154,6 +167,7 @@ struct RouterState {
     entity_name: Arc<String>,
     id_type: IdType,
     primary_key_param: Arc<String>,
+    primary_key_params: Arc<Vec<String>>,
     use_optimistic_concurrency: bool,
     create_validator: Option<ValidatorFn>,
     update_validator: Option<ValidatorFn>,
@@ -191,6 +205,28 @@ fn extract_id(state: &RouterState, raw: &str) -> Result<Value, Response> {
     parse_id(state.id_type, raw).map_err(validation_error)
 }
 
+fn extract_identity(
+    state: &RouterState,
+    params: &std::collections::HashMap<String, String>,
+) -> Result<Value, Response> {
+    if state.primary_key_params.len() <= 1 {
+        let name = state.primary_key_param.as_str();
+        let raw = params
+            .get(name)
+            .or_else(|| params.values().next())
+            .map(String::as_str)
+            .unwrap_or("");
+        return extract_id(state, raw);
+    }
+    let mut obj = serde_json::Map::new();
+    for name in state.primary_key_params.iter() {
+        let raw = params.get(name).map(String::as_str).unwrap_or("");
+        let value = parse_id(state.id_type, raw).map_err(validation_error)?;
+        obj.insert(name.clone(), value);
+    }
+    Ok(Value::Object(obj))
+}
+
 fn require_if_match(
     state: &RouterState,
     method: &str,
@@ -209,7 +245,9 @@ fn require_if_match(
 }
 
 fn strip_pk_from_body(state: &RouterState, body: &mut RowMap) {
-    body.remove(state.primary_key_param.as_str());
+    for name in state.primary_key_params.iter() {
+        body.remove(name);
+    }
 }
 
 fn run_validator(validator: &Option<ValidatorFn>, body: &RowMap) -> Result<(), Response> {
@@ -249,9 +287,9 @@ async fn list_handler(State(state): State<RouterState>) -> impl IntoResponse {
 
 async fn get_by_id_handler(
     State(state): State<RouterState>,
-    Path(id): Path<String>,
+    Path(params): Path<std::collections::HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let id_value = match extract_id(&state, &id) {
+    let id_value = match extract_identity(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
@@ -292,7 +330,7 @@ async fn create_handler(
 async fn mutation_handler(
     state: RouterState,
     method: &str,
-    id: String,
+    params: std::collections::HashMap<String, String>,
     headers: HeaderMap,
     mut body: RowMap,
 ) -> Response {
@@ -303,7 +341,7 @@ async fn mutation_handler(
     if let Err(resp) = run_validator(resolve_mutation_validator(&state, method), &body) {
         return resp;
     }
-    let id_value = match extract_id(&state, &id) {
+    let id_value = match extract_identity(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
@@ -330,32 +368,32 @@ async fn mutation_handler(
 
 async fn update_handler(
     State(state): State<RouterState>,
-    Path(id): Path<String>,
+    Path(params): Path<std::collections::HashMap<String, String>>,
     headers: HeaderMap,
     Json(body): Json<RowMap>,
 ) -> Response {
-    mutation_handler(state, "PUT", id, headers, body).await
+    mutation_handler(state, "PUT", params, headers, body).await
 }
 
 async fn patch_handler(
     State(state): State<RouterState>,
-    Path(id): Path<String>,
+    Path(params): Path<std::collections::HashMap<String, String>>,
     headers: HeaderMap,
     Json(body): Json<RowMap>,
 ) -> Response {
-    mutation_handler(state, "PATCH", id, headers, body).await
+    mutation_handler(state, "PATCH", params, headers, body).await
 }
 
 async fn delete_handler(
     State(state): State<RouterState>,
-    Path(id): Path<String>,
+    Path(params): Path<std::collections::HashMap<String, String>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let expected_updated = match require_if_match(&state, "DELETE", &headers) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
-    let id_value = match extract_id(&state, &id) {
+    let id_value = match extract_identity(&state, &params) {
         Ok(v) => v,
         Err(resp) => return resp,
     };
@@ -410,6 +448,7 @@ mod tests {
             entity_name: Arc::new("User".to_string()),
             id_type: IdType::Integer,
             primary_key_param: Arc::new("id".to_string()),
+            primary_key_params: Arc::new(vec!["id".to_string()]),
             use_optimistic_concurrency: occ,
             create_validator: None,
             update_validator: None,

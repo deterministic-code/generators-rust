@@ -4,12 +4,10 @@ import { content, type GenerateEntry } from "@deterministic-code/generators-comm
 import {
   authoredViewTypesOf,
   datasourceTypesOf,
-  unionMembers,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
 import {
   shapedToks,
-  viewExpr,
   type ViewTestOpts,
 } from "./common/view-test-fixtures.ts";
 import {
@@ -50,13 +48,10 @@ class Generator extends Emit implements ViewTestOpts {
   }
 
   private tests(view: Type): GenerateEntry {
-    const members = unionMembers(view);
-    const isUnion = members !== undefined;
-    const fields = isUnion ? [] : shapedToks(view, this, new Set([view.name]));
+    const fields = shapedToks(view, this, new Set([view.name]));
     const cls = this.casing.convertTypes(view.name);
-    const fixture = isUnion
-      ? ""
-      : fields.length === 0
+    const fixture =
+      fields.length === 0
         ? `${cls} {}`
         : `${cls} {\n${fields.map((f) => `            ${f.ident}: ${f.sampleExpr},`).join("\n")}\n        }`;
     const src = this.imports.view(view.name);
@@ -66,17 +61,11 @@ class Generator extends Emit implements ViewTestOpts {
         schemaVersion: this.settings.schemaVersion,
         structName: cls,
         fileBase: this.casing.fileBase(view.name),
-        isShaped: !isUnion,
-        isUnion,
+        isShaped: true,
+        isUnion: false,
         fixture,
         fields,
-        members: isUnion
-          ? members.map((name) => ({
-              ident: this.casing.convertFields(name),
-              acceptsMemberTest: this.casing.fnIdent(`accepts_${name}_member`),
-              memberExpr: `${cls}::${this.casing.convertTypes(name)}(${viewExpr(name, this, new Set([view.name]))})`,
-            }))
-          : [],
+        members: [],
       }),
     );
   }

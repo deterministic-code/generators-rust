@@ -45,8 +45,27 @@ impl Dialect {
     }
 
     pub fn order_by_pk(&self, pk_column: &str) -> Result<String, RepositoryError> {
-        let quoted = self.quote(pk_column)?;
-        Ok(format!("ORDER BY {quoted} ASC"))
+        self.order_by_pks(&[pk_column.to_string()])
+    }
+
+    pub fn order_by_pks(&self, pk_columns: &[String]) -> Result<String, RepositoryError> {
+        let mut parts = Vec::with_capacity(pk_columns.len());
+        for column in pk_columns {
+            parts.push(format!("{} ASC", self.quote(column)?));
+        }
+        Ok(format!("ORDER BY {}", parts.join(", ")))
+    }
+
+    pub fn identity_eq(
+        &self,
+        pk_columns: &[String],
+        start_index: usize,
+    ) -> Result<String, RepositoryError> {
+        let mut parts = Vec::with_capacity(pk_columns.len());
+        for (i, column) in pk_columns.iter().enumerate() {
+            parts.push(self.pk_eq_placeholder(column, start_index + i)?);
+        }
+        Ok(parts.join(" AND "))
     }
 }
 
@@ -55,10 +74,18 @@ pub fn build_select_by_id(
     table: &str,
     pk_column: &str,
 ) -> Result<String, RepositoryError> {
+    build_select_by_identity(dialect, table, &[pk_column.to_string()])
+}
+
+pub fn build_select_by_identity(
+    dialect: Dialect,
+    table: &str,
+    pk_columns: &[String],
+) -> Result<String, RepositoryError> {
     let quoted = dialect.quote(table)?;
     Ok(format!(
         "SELECT * FROM {quoted} WHERE {}",
-        dialect.pk_eq_placeholder(pk_column, 1)?
+        dialect.identity_eq(pk_columns, 1)?
     ))
 }
 
@@ -130,11 +157,11 @@ pub fn build_insert(
     Ok(sql)
 }
 
-pub fn build_update(
+pub fn build_update_identity(
     dialect: Dialect,
     table: &str,
     columns: &[&str],
-    pk_column: &str,
+    pk_columns: &[String],
 ) -> Result<String, RepositoryError> {
     let table_quoted = dialect.quote(table)?;
     let mut set_clauses = Vec::with_capacity(columns.len());
@@ -143,8 +170,7 @@ pub fn build_update(
         let ph = dialect.placeholder(i + 1);
         set_clauses.push(format!("{q} = {ph}"));
     }
-    let id_index = columns.len() + 1;
-    let id_clause = dialect.pk_eq_placeholder(pk_column, id_index)?;
+    let id_clause = dialect.identity_eq(pk_columns, columns.len() + 1)?;
     let set_joined = set_clauses.join(", ");
     let sql = match dialect {
         Dialect::Postgres => {
@@ -156,6 +182,15 @@ pub fn build_update(
         _ => format!("UPDATE {table_quoted} SET {set_joined} WHERE {id_clause}"),
     };
     Ok(sql)
+}
+
+pub fn build_update(
+    dialect: Dialect,
+    table: &str,
+    columns: &[&str],
+    pk_column: &str,
+) -> Result<String, RepositoryError> {
+    build_update_identity(dialect, table, columns, &[pk_column.to_string()])
 }
 
 pub fn build_select_in(
@@ -219,14 +254,14 @@ pub fn build_delete_by(
     ))
 }
 
-pub fn build_delete(
+pub fn build_delete_identity(
     dialect: Dialect,
     table: &str,
-    pk_column: &str,
+    pk_columns: &[String],
 ) -> Result<String, RepositoryError> {
     let table_quoted = dialect.quote(table)?;
-    let pk_quoted = dialect.quote(pk_column)?;
-    let id_clause = dialect.pk_eq_placeholder(pk_column, 1)?;
+    let pk_quoted = dialect.quote(pk_columns.first().map(String::as_str).unwrap_or("id"))?;
+    let id_clause = dialect.identity_eq(pk_columns, 1)?;
     let sql = match dialect {
         Dialect::Postgres => {
             format!("DELETE FROM {table_quoted} WHERE {id_clause} RETURNING {pk_quoted}")
@@ -240,4 +275,12 @@ pub fn build_delete(
         _ => format!("DELETE FROM {table_quoted} WHERE {id_clause}"),
     };
     Ok(sql)
+}
+
+pub fn build_delete(
+    dialect: Dialect,
+    table: &str,
+    pk_column: &str,
+) -> Result<String, RepositoryError> {
+    build_delete_identity(dialect, table, &[pk_column.to_string()])
 }

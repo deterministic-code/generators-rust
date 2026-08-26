@@ -14,6 +14,7 @@ pub fn router(service: Arc<{{className}}>) -> axum::Router {
         base_path: "{{path}}".to_string(),
         id_type: IdType::{{idTypeVariant}},
         primary_key_param: {{{primaryKeyParamExpr}}},
+        primary_key_params: {{{primaryKeyParamsExpr}}},
         use_optimistic_concurrency: {{useOptimisticConcurrency}},
         create_validator: Some(Arc::new(|body: &RowMap| {{createValidatorName}}(body))),
         update_validator: Some(Arc::new(|body: &RowMap| {{updateValidatorName}}(body))),

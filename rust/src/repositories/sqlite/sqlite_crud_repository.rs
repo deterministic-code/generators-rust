@@ -8,15 +8,17 @@ use crate::error::RepositoryError;
 use crate::id_type::IdType;
 use crate::mappings::field_mapping_translator::FieldMappingTranslator;
 use crate::mappings::type_field_converter::TypeFieldConverter;
-use crate::repositories::crud_repository::{fill_uuid_primary_key, CrudRepository};
+use crate::repositories::crud_repository::{
+    bind_identity, fill_uuid_primary_key, identity_from_row, CrudRepository,
+};
 use crate::repositories::datasource::{Datasource, IntoDynDatasource};
 use crate::repositories::datasource_middleware::run_query_with_middlewares;
 use crate::repositories::datasource_middleware::{DataSourceMiddleware, DatabaseBackend};
 use crate::repositories::repository::Repository;
 use crate::repositories::row_map::RowMap;
 use crate::repositories::sql_builder::{
-    build_delete, build_delete_by, build_insert, build_select_all, build_select_by_column,
-    build_select_by_id, build_select_in, build_update, build_update_by, Dialect,
+    build_delete_by, build_delete_identity, build_insert, build_select_all, build_select_by_column,
+    build_select_by_identity, build_select_in, build_update_by, build_update_identity, Dialect,
 };
 
 const DIALECT: Dialect = Dialect::Sqlite;
@@ -25,7 +27,7 @@ const BACKEND: DatabaseBackend = DatabaseBackend::Sqlite;
 pub struct SqliteCrudRepository {
     datasource: Arc<dyn Datasource>,
     table_name: String,
-    primary_key: String,
+    primary_keys: Vec<String>,
     middlewares: Vec<Arc<dyn DataSourceMiddleware>>,
     field_mapping_translator: Arc<FieldMappingTranslator>,
     converters_by_type: BTreeMap<String, Arc<dyn TypeFieldConverter>>,
@@ -46,7 +48,7 @@ impl SqliteCrudRepository {
         Ok(Self {
             datasource: datasource.into_dyn_datasource(),
             table_name,
-            primary_key: "id".to_string(),
+            primary_keys: vec!["id".to_string()],
             middlewares: Vec::new(),
             field_mapping_translator: passthrough,
             converters_by_type: BTreeMap::new(),
@@ -56,10 +58,25 @@ impl SqliteCrudRepository {
         })
     }
 
-    pub fn with_primary_key(mut self, column: impl Into<String>) -> Result<Self, RepositoryError> {
-        let column = column.into();
-        DIALECT.quote(&column)?;
-        self.primary_key = column;
+    pub fn with_primary_key(self, column: impl Into<String>) -> Result<Self, RepositoryError> {
+        self.with_primary_keys([column.into()])
+    }
+
+    pub fn with_primary_keys<I, S>(mut self, columns: I) -> Result<Self, RepositoryError>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let columns: Vec<String> = columns.into_iter().map(Into::into).collect();
+        if columns.is_empty() {
+            return Err(RepositoryError::Other(
+                "primary key requires at least one column".into(),
+            ));
+        }
+        for column in &columns {
+            DIALECT.quote(column)?;
+        }
+        self.primary_keys = columns;
         Ok(self)
     }
 
@@ -146,7 +163,14 @@ impl SqliteCrudRepository {
     }
 
     pub fn primary_key(&self) -> &str {
-        &self.primary_key
+        self.primary_keys.first().map(String::as_str).unwrap_or("id")
+    }
+
+    fn physical_primary_keys(&self) -> Vec<String> {
+        self.primary_keys
+            .iter()
+            .map(|c| self.field_mapping_translator.to_physical(c))
+            .collect()
     }
 
     async fn run_query(&self, sql: &str, params: &[Value]) -> Result<Vec<RowMap>, RepositoryError> {
@@ -188,13 +212,18 @@ impl Repository for SqliteCrudRepository {
 #[async_trait]
 impl CrudRepository for SqliteCrudRepository {
     fn primary_key_column(&self) -> &str {
-        &self.primary_key
+        self.primary_key()
+    }
+
+    fn primary_key_columns(&self) -> Vec<String> {
+        self.primary_keys.clone()
     }
 
     async fn find(&self, id: &Value) -> Result<Option<RowMap>, RepositoryError> {
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
-        let sql = build_select_by_id(DIALECT, &self.table_name, &physical_pk)?;
-        let rows = self.run_query(&sql, std::slice::from_ref(id)).await?;
+        let physical_pks = self.physical_primary_keys();
+        let sql = build_select_by_identity(DIALECT, &self.table_name, &physical_pks)?;
+        let params = bind_identity(id, &self.primary_keys)?;
+        let rows = self.run_query(&sql, &params).await?;
         Ok(rows
             .into_iter()
             .next()
@@ -202,7 +231,7 @@ impl CrudRepository for SqliteCrudRepository {
     }
 
     async fn find_all(&self) -> Result<Vec<RowMap>, RepositoryError> {
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
+        let physical_pk = self.field_mapping_translator.to_physical(self.primary_key());
         let sql = build_select_all(DIALECT, &self.table_name, &physical_pk)?;
         let rows = self.run_query(&sql, &[]).await?;
         Ok(rows
@@ -213,7 +242,7 @@ impl CrudRepository for SqliteCrudRepository {
 
     async fn find_by(&self, column: &str, value: &Value) -> Result<Vec<RowMap>, RepositoryError> {
         let physical_column = self.field_mapping_translator.to_physical(column);
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
+        let physical_pk = self.field_mapping_translator.to_physical(self.primary_key());
         let sql =
             build_select_by_column(DIALECT, &self.table_name, &physical_column, &physical_pk)?;
         let bound_value = self.apply_to(column, value.clone());
@@ -226,14 +255,14 @@ impl CrudRepository for SqliteCrudRepository {
 
     async fn add(&self, data: RowMap) -> Result<RowMap, RepositoryError> {
         let mut data = data;
-        fill_uuid_primary_key(&mut data, self.id_type, &self.primary_key);
+        fill_uuid_primary_key(&mut data, self.id_type, self.primary_key());
         if !data.contains_key("uuid") && self.resolve_has_uuid_column().await? {
             data.insert("uuid".to_string(), Value::from(Uuid::new_v4().to_string()));
         }
         let prepared = self.prepare_write_row(data);
         let columns: Vec<&str> = prepared.keys().map(String::as_str).collect();
         let values: Vec<Value> = prepared.values().cloned().collect();
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
+        let physical_pk = self.field_mapping_translator.to_physical(self.primary_key());
         let sql = build_insert(DIALECT, &self.table_name, &columns, &physical_pk)?;
         let rows = self.run_query(&sql, &values).await?;
         let inserted = rows.into_iter().next().ok_or_else(|| {
@@ -249,17 +278,18 @@ impl CrudRepository for SqliteCrudRepository {
         let prepared = self.prepare_write_row(data);
         let columns: Vec<&str> = prepared.keys().map(String::as_str).collect();
         let mut values: Vec<Value> = prepared.values().cloned().collect();
-        values.push(id.clone());
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
-        let sql = build_update(DIALECT, &self.table_name, &columns, &physical_pk)?;
+        values.extend(bind_identity(id, &self.primary_keys)?);
+        let physical_pks = self.physical_primary_keys();
+        let sql = build_update_identity(DIALECT, &self.table_name, &columns, &physical_pks)?;
         self.run_query(&sql, &values).await?;
         self.find(id).await
     }
 
     async fn delete(&self, id: &Value) -> Result<bool, RepositoryError> {
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
-        let sql = build_delete(DIALECT, &self.table_name, &physical_pk)?;
-        let rows = self.run_query(&sql, std::slice::from_ref(id)).await?;
+        let physical_pks = self.physical_primary_keys();
+        let sql = build_delete_identity(DIALECT, &self.table_name, &physical_pks)?;
+        let params = bind_identity(id, &self.primary_keys)?;
+        let rows = self.run_query(&sql, &params).await?;
         Ok(!rows.is_empty())
     }
 
@@ -315,7 +345,7 @@ impl CrudRepository for SqliteCrudRepository {
             return Ok(Vec::new());
         }
         let physical_column = self.field_mapping_translator.to_physical(column);
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
+        let physical_pk = self.field_mapping_translator.to_physical(self.primary_key());
         let sql = build_select_in(
             DIALECT,
             &self.table_name,
@@ -349,7 +379,7 @@ impl CrudRepository for SqliteCrudRepository {
         }
         let ids: Vec<Value> = matched
             .iter()
-            .filter_map(|r| r.get(&self.primary_key).cloned())
+            .map(|r| identity_from_row(r, &self.primary_keys))
             .collect();
         let prepared = self.prepare_write_row(data);
         let columns: Vec<&str> = prepared.keys().map(String::as_str).collect();
@@ -359,7 +389,13 @@ impl CrudRepository for SqliteCrudRepository {
         let physical_column = self.field_mapping_translator.to_physical(column);
         let sql = build_update_by(DIALECT, &self.table_name, &columns, &physical_column)?;
         self.run_query(&sql, &params).await?;
-        self.find_in(&self.primary_key, &ids).await
+        let mut out = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(row) = self.find(&id).await? {
+                out.push(row);
+            }
+        }
+        Ok(out)
     }
 
     async fn delete_by(&self, column: &str, value: &Value) -> Result<u64, RepositoryError> {
