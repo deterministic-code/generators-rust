@@ -2,6 +2,7 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
+  columnFields,
   datasourceTypesOf,
   isPkField,
 } from "@deterministic-code/generators-common/spec-types";
@@ -142,7 +143,7 @@ class Generator extends Emit {
   }
 
   private validator(table: Type): GenerateEntry {
-    const lines = table.fields.flatMap((field) =>
+    const lines = columnFields(table.fields).flatMap((field) => {
       checksForField(field, this.casing, isPkField(field, table)),
     );
     const has = lines.length > 0;
