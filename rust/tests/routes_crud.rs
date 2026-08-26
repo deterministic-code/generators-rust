@@ -55,12 +55,25 @@ impl MapService {
     fn last_delete_expected(&self) -> Option<String> {
         self.state.lock().unwrap().last_delete_expected.clone()
     }
+    fn seed(&self, id: Value, row: RowMap) {
+        let mut state = self.state.lock().unwrap();
+        state.rows.insert(value_to_key(&id), row);
+    }
 }
 
 fn value_to_key(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
         Value::Number(n) => n.to_string(),
+        Value::Object(obj) => {
+            let mut parts: Vec<_> = obj.iter().collect();
+            parts.sort_by(|a, b| a.0.cmp(b.0));
+            parts
+                .into_iter()
+                .map(|(k, val)| format!("{k}={}", value_to_key(val)))
+                .collect::<Vec<_>>()
+                .join("/")
+        }
         other => other.to_string(),
     }
 }
@@ -140,6 +153,7 @@ fn integer_router(svc: Arc<MapService>) -> Router {
         base_path: "/api/users".to_string(),
         id_type: IdType::Integer,
         primary_key_param: None,
+        primary_key_params: vec![],
         use_optimistic_concurrency: false,
         create_validator: None,
         update_validator: None,
@@ -364,6 +378,68 @@ async fn custom_route_still_works_when_merged_with_generated() {
     assert_eq!(body, json!({ "custom": "yes" }));
 }
 
+fn composite_router(svc: Arc<MapService>) -> Router {
+    create_crud_router(CrudRouterConfig {
+        service: svc,
+        entity_name: "Link".to_string(),
+        base_path: "/api/links".to_string(),
+        id_type: IdType::Integer,
+        primary_key_param: None,
+        primary_key_params: vec!["left_id".to_string(), "right_id".to_string()],
+        use_optimistic_concurrency: false,
+        create_validator: None,
+        update_validator: None,
+        patch_validator: None,
+        coerce_row: None,
+        enrich_items: None,
+        enrich_item: None,
+        resolve_item: None,
+    })
+}
+
+fn seeded_link() -> (Arc<MapService>, RowMap) {
+    let svc = Arc::new(MapService::new_integer());
+    let mut row = RowMap::new();
+    row.insert("left_id".to_string(), Value::from(1i64));
+    row.insert("right_id".to_string(), Value::from(2i64));
+    row.insert("label".to_string(), Value::from("ab"));
+    svc.seed(json!({ "left_id": 1, "right_id": 2 }), row.clone());
+    (svc, row)
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn composite_get_passes_both_keys() {
+    let (svc, row) = seeded_link();
+    let (status, body) = send(composite_router(svc), Method::GET, "/api/links/1/2", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["left_id"], json!(1));
+    assert_eq!(body["right_id"], json!(2));
+    assert_eq!(body["label"], json!("ab"));
+    let _ = row;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn composite_patch_updates_by_both_keys() {
+    let (svc, _) = seeded_link();
+    let (status, body) = send(
+        composite_router(svc),
+        Method::PATCH,
+        "/api/links/1/2",
+        Some(json!({ "label": "changed" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["label"], json!("changed"));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn composite_delete_removes_by_both_keys() {
+    let (svc, _) = seeded_link();
+    let (status, body) = send(composite_router(svc), Method::DELETE, "/api/links/1/2", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["success"], json!(true));
+}
+
 fn string_pk_router(svc: Arc<MapService>) -> Router {
     create_crud_router(CrudRouterConfig {
         service: svc,
@@ -371,6 +447,7 @@ fn string_pk_router(svc: Arc<MapService>) -> Router {
         base_path: "/api/mailboxes".to_string(),
         id_type: IdType::String,
         primary_key_param: Some("key".to_string()),
+        primary_key_params: vec![],
         use_optimistic_concurrency: false,
         create_validator: None,
         update_validator: None,
@@ -416,6 +493,7 @@ fn uuid_router(svc: Arc<MapService>) -> Router {
         base_path: "/api/sessions".to_string(),
         id_type: IdType::Uuid,
         primary_key_param: None,
+        primary_key_params: vec![],
         use_optimistic_concurrency: false,
         create_validator: None,
         update_validator: None,
@@ -463,6 +541,7 @@ fn optimistic_router(svc: Arc<MapService>) -> Router {
         base_path: "/api/users".to_string(),
         id_type: IdType::Integer,
         primary_key_param: None,
+        primary_key_params: vec![],
         use_optimistic_concurrency: true,
         create_validator: None,
         update_validator: None,
@@ -655,6 +734,7 @@ fn hooked_router_with_patch(
         base_path: "/api/users".to_string(),
         id_type: IdType::Integer,
         primary_key_param: None,
+        primary_key_params: vec![],
         use_optimistic_concurrency: false,
         create_validator: create,
         update_validator: update,
@@ -820,6 +900,7 @@ fn enriched_router(
         base_path: "/api/users".to_string(),
         id_type: IdType::Integer,
         primary_key_param: None,
+        primary_key_params: vec![],
         use_optimistic_concurrency: false,
         create_validator: None,
         update_validator: None,

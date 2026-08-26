@@ -2,8 +2,8 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
+  identityColumns,
   isReadonlyLookup,
-  pkName,
   tableByName,
 } from "@deterministic-code/generators-common/spec-types";
 import {
@@ -85,8 +85,16 @@ class Generator extends Emit {
       useOptimisticConcurrency: table?.useOptimisticConcurrency,
     });
     const fileBase = this.imports.routeModule(candidate.name);
-    const pk = type !== undefined ? pkName(type, table) : "id";
-    const pkType = type?.fields.find((f) => f.name === pk)?.type ?? "integer";
+    const columns =
+      type !== undefined ? identityColumns(type, table) : ["id"];
+    const names = columns.length > 0 ? columns : ["id"];
+    const missingId = names
+      .map((column) => {
+        const pkType =
+          type?.fields.find((f) => f.name === column)?.type ?? "integer";
+        return missingIdExpr(pkType);
+      })
+      .join("/");
     const shared = {
       fileBase,
       serviceImport: this.imports.serviceUse(
@@ -96,7 +104,7 @@ class Generator extends Emit {
       className: this.casing.serviceClassName(candidate.name),
       entitySnake: candidate.name,
       mountPath,
-      missingId: missingIdExpr(pkType),
+      missingId,
       occ,
       getListTest: this.casing.fnIdent(
         `get_${candidate.name}_list_returns_200`,

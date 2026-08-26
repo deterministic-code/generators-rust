@@ -1,6 +1,6 @@
 use deterministic::repositories::inmemory::InMemoryCrudRepository;
 use deterministic::{CrudRepository, Repository, RepositoryError, RowMap};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 fn row(name: &str) -> RowMap {
     let mut m = RowMap::new();
@@ -383,4 +383,24 @@ async fn add_assigns_incremental_ids_with_flag_disabled() {
     let b = repo.add(row("bob")).await.unwrap();
     assert_eq!(a.get("id").unwrap().as_i64(), Some(1));
     assert_eq!(b.get("id").unwrap().as_i64(), Some(2));
+}
+
+#[tokio::test]
+async fn composite_identity_find_update_delete() {
+    let repo = InMemoryCrudRepository::with_standard_columns(false)
+        .with_primary_keys(["left_id", "right_id"]);
+    let mut data = RowMap::new();
+    data.insert("left_id".to_string(), Value::from(1i64));
+    data.insert("right_id".to_string(), Value::from(2i64));
+    data.insert("label".to_string(), Value::from("ab"));
+    repo.add(data).await.unwrap();
+    let id = json!({ "left_id": 1, "right_id": 2 });
+    let found = repo.find(&id).await.unwrap().unwrap();
+    assert_eq!(found.get("label").unwrap().as_str(), Some("ab"));
+    let mut patch = RowMap::new();
+    patch.insert("label".to_string(), Value::from("changed"));
+    let updated = repo.update(&id, patch).await.unwrap().unwrap();
+    assert_eq!(updated.get("label").unwrap().as_str(), Some("changed"));
+    assert!(repo.delete(&id).await.unwrap());
+    assert!(repo.find(&id).await.unwrap().is_none());
 }

@@ -7,7 +7,9 @@ use crate::error::RepositoryError;
 use crate::id_type::IdType;
 use crate::mappings::field_mapping_translator::FieldMappingTranslator;
 use crate::mappings::type_field_converter::TypeFieldConverter;
-use crate::repositories::crud_repository::{fill_uuid_primary_key, CrudRepository};
+use crate::repositories::crud_repository::{
+    bind_identity, fill_uuid_primary_key, CrudRepository,
+};
 use crate::repositories::datasource::{Datasource, IntoDynDatasource};
 use crate::repositories::datasource_middleware::run_query_with_middlewares;
 use crate::repositories::datasource_middleware::{DataSourceMiddleware, DatabaseBackend};
@@ -15,8 +17,9 @@ use crate::repositories::postgres::pg_converting_repo::PgConvertingRepo;
 use crate::repositories::repository::Repository;
 use crate::repositories::row_map::RowMap;
 use crate::repositories::sql_builder::{
-    build_delete, build_delete_by, build_insert, build_select_all, build_select_by_column,
-    build_select_by_id, build_select_in, build_update, build_update_by, Dialect,
+    build_delete_by, build_delete_identity, build_insert, build_select_all,
+    build_select_by_column, build_select_by_identity, build_select_in, build_update_by,
+    build_update_identity, Dialect,
 };
 
 const DIALECT: Dialect = Dialect::Postgres;
@@ -25,7 +28,7 @@ const BACKEND: DatabaseBackend = DatabaseBackend::Postgres;
 pub struct PostgresCrudRepository {
     datasource: Arc<dyn Datasource>,
     table_name: String,
-    primary_key: String,
+    primary_keys: Vec<String>,
     middlewares: Vec<Arc<dyn DataSourceMiddleware>>,
     field_mapping_translator: Arc<FieldMappingTranslator>,
     converters_by_type: BTreeMap<String, Arc<dyn TypeFieldConverter>>,
@@ -44,7 +47,7 @@ impl PostgresCrudRepository {
         Ok(Self {
             datasource: datasource.into_dyn_datasource(),
             table_name,
-            primary_key: "id".to_string(),
+            primary_keys: vec!["id".to_string()],
             middlewares: Vec::new(),
             field_mapping_translator: passthrough,
             converters_by_type: BTreeMap::new(),
@@ -53,10 +56,25 @@ impl PostgresCrudRepository {
         })
     }
 
-    pub fn with_primary_key(mut self, column: impl Into<String>) -> Result<Self, RepositoryError> {
-        let column = column.into();
-        DIALECT.quote(&column)?;
-        self.primary_key = column;
+    pub fn with_primary_key(self, column: impl Into<String>) -> Result<Self, RepositoryError> {
+        self.with_primary_keys([column.into()])
+    }
+
+    pub fn with_primary_keys<I, S>(mut self, columns: I) -> Result<Self, RepositoryError>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let columns: Vec<String> = columns.into_iter().map(Into::into).collect();
+        if columns.is_empty() {
+            return Err(RepositoryError::Other(
+                "primary key requires at least one column".into(),
+            ));
+        }
+        for column in &columns {
+            DIALECT.quote(column)?;
+        }
+        self.primary_keys = columns;
         Ok(self)
     }
 
@@ -100,26 +118,33 @@ impl PostgresCrudRepository {
     }
 
     pub fn primary_key(&self) -> &str {
-        &self.primary_key
+        self.primary_keys.first().map(String::as_str).unwrap_or("id")
+    }
+
+    fn physical_primary_keys(&self) -> Vec<String> {
+        self.primary_keys
+            .iter()
+            .map(|c| self.field_mapping_translator.to_physical(c))
+            .collect()
     }
 
     pub fn build_find_sql(&self) -> Result<String, RepositoryError> {
-        build_select_by_id(DIALECT, &self.table_name, &self.primary_key)
+        build_select_by_identity(DIALECT, &self.table_name, &self.primary_keys)
     }
     pub fn build_find_all_sql(&self) -> Result<String, RepositoryError> {
-        build_select_all(DIALECT, &self.table_name, &self.primary_key)
+        build_select_all(DIALECT, &self.table_name, self.primary_key())
     }
     pub fn build_find_by_sql(&self, column: &str) -> Result<String, RepositoryError> {
-        build_select_by_column(DIALECT, &self.table_name, column, &self.primary_key)
+        build_select_by_column(DIALECT, &self.table_name, column, self.primary_key())
     }
     pub fn build_add_sql(&self, columns: &[&str]) -> Result<String, RepositoryError> {
-        build_insert(DIALECT, &self.table_name, columns, &self.primary_key)
+        build_insert(DIALECT, &self.table_name, columns, self.primary_key())
     }
     pub fn build_update_sql(&self, columns: &[&str]) -> Result<String, RepositoryError> {
-        build_update(DIALECT, &self.table_name, columns, &self.primary_key)
+        build_update_identity(DIALECT, &self.table_name, columns, &self.primary_keys)
     }
     pub fn build_delete_sql(&self) -> Result<String, RepositoryError> {
-        build_delete(DIALECT, &self.table_name, &self.primary_key)
+        build_delete_identity(DIALECT, &self.table_name, &self.primary_keys)
     }
 
     async fn run_query(&self, sql: &str, params: &[Value]) -> Result<Vec<RowMap>, RepositoryError> {
@@ -156,14 +181,20 @@ impl Repository for PostgresCrudRepository {
 #[async_trait]
 impl CrudRepository for PostgresCrudRepository {
     fn primary_key_column(&self) -> &str {
-        &self.primary_key
+        self.primary_key()
+    }
+
+    fn primary_key_columns(&self) -> Vec<String> {
+        self.primary_keys.clone()
     }
 
     async fn find(&self, id: &Value) -> Result<Option<RowMap>, RepositoryError> {
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
-        let sql = build_select_by_id(DIALECT, &self.table_name, &physical_pk)?;
-        let sql = PgConvertingRepo::apply_converter_bind_casts(self, sql, &[physical_pk.as_str()]);
-        let rows = self.run_query(&sql, std::slice::from_ref(id)).await?;
+        let physical_pks = self.physical_primary_keys();
+        let sql = build_select_by_identity(DIALECT, &self.table_name, &physical_pks)?;
+        let cast_columns: Vec<&str> = physical_pks.iter().map(String::as_str).collect();
+        let sql = PgConvertingRepo::apply_converter_bind_casts(self, sql, &cast_columns);
+        let params = bind_identity(id, &self.primary_keys)?;
+        let rows = self.run_query(&sql, &params).await?;
         Ok(rows
             .into_iter()
             .next()
@@ -171,7 +202,7 @@ impl CrudRepository for PostgresCrudRepository {
     }
 
     async fn find_all(&self) -> Result<Vec<RowMap>, RepositoryError> {
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
+        let physical_pk = self.field_mapping_translator.to_physical(self.primary_key());
         let sql = build_select_all(DIALECT, &self.table_name, &physical_pk)?;
         let rows = self.run_query(&sql, &[]).await?;
         Ok(rows
@@ -182,7 +213,7 @@ impl CrudRepository for PostgresCrudRepository {
 
     async fn find_by(&self, column: &str, value: &Value) -> Result<Vec<RowMap>, RepositoryError> {
         let physical_column = self.field_mapping_translator.to_physical(column);
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
+        let physical_pk = self.field_mapping_translator.to_physical(self.primary_key());
         let sql =
             build_select_by_column(DIALECT, &self.table_name, &physical_column, &physical_pk)?;
         let sql =
@@ -197,11 +228,11 @@ impl CrudRepository for PostgresCrudRepository {
 
     async fn add(&self, data: RowMap) -> Result<RowMap, RepositoryError> {
         let mut data = data;
-        fill_uuid_primary_key(&mut data, self.id_type, &self.primary_key);
+        fill_uuid_primary_key(&mut data, self.id_type, self.primary_key());
         let prepared = self.prepare_write_row(data);
         let columns: Vec<&str> = prepared.keys().map(String::as_str).collect();
         let values: Vec<Value> = prepared.values().cloned().collect();
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
+        let physical_pk = self.field_mapping_translator.to_physical(self.primary_key());
         let sql = build_insert(DIALECT, &self.table_name, &columns, &physical_pk)?;
         let sql = PgConvertingRepo::apply_converter_bind_casts(self, sql, &columns);
         let rows = self.run_query(&sql, &values).await?;
@@ -218,11 +249,11 @@ impl CrudRepository for PostgresCrudRepository {
         let prepared = self.prepare_write_row(data);
         let columns: Vec<&str> = prepared.keys().map(String::as_str).collect();
         let mut values: Vec<Value> = prepared.values().cloned().collect();
-        values.push(id.clone());
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
-        let sql = build_update(DIALECT, &self.table_name, &columns, &physical_pk)?;
+        values.extend(bind_identity(id, &self.primary_keys)?);
+        let physical_pks = self.physical_primary_keys();
+        let sql = build_update_identity(DIALECT, &self.table_name, &columns, &physical_pks)?;
         let mut cast_columns = columns.clone();
-        cast_columns.push(physical_pk.as_str());
+        cast_columns.extend(physical_pks.iter().map(String::as_str));
         let sql = PgConvertingRepo::apply_converter_bind_casts(self, sql, &cast_columns);
         let rows = self.run_query(&sql, &values).await?;
         Ok(rows
@@ -232,10 +263,12 @@ impl CrudRepository for PostgresCrudRepository {
     }
 
     async fn delete(&self, id: &Value) -> Result<bool, RepositoryError> {
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
-        let sql = build_delete(DIALECT, &self.table_name, &physical_pk)?;
-        let sql = PgConvertingRepo::apply_converter_bind_casts(self, sql, &[physical_pk.as_str()]);
-        let rows = self.run_query(&sql, std::slice::from_ref(id)).await?;
+        let physical_pks = self.physical_primary_keys();
+        let sql = build_delete_identity(DIALECT, &self.table_name, &physical_pks)?;
+        let cast_columns: Vec<&str> = physical_pks.iter().map(String::as_str).collect();
+        let sql = PgConvertingRepo::apply_converter_bind_casts(self, sql, &cast_columns);
+        let params = bind_identity(id, &self.primary_keys)?;
+        let rows = self.run_query(&sql, &params).await?;
         Ok(!rows.is_empty())
     }
 
@@ -248,7 +281,7 @@ impl CrudRepository for PostgresCrudRepository {
             return Ok(Vec::new());
         }
         let physical_column = self.field_mapping_translator.to_physical(column);
-        let physical_pk = self.field_mapping_translator.to_physical(&self.primary_key);
+        let physical_pk = self.field_mapping_translator.to_physical(self.primary_key());
         let sql = build_select_in(
             DIALECT,
             &self.table_name,
@@ -313,6 +346,7 @@ impl CrudRepository for PostgresCrudRepository {
 #[cfg(test)]
 mod where_clause_cast_tests {
     use super::*;
+    use crate::repositories::sql_builder::build_select_by_id;
     use crate::repositories::postgres::converter_bind_casts::apply_converter_bind_casts;
     use crate::run::converter_defaults::default_field_converters_for_dialect;
     use crate::run::DialectKind;

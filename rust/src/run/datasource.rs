@@ -72,9 +72,10 @@ impl OpenDatasource {
         table: &str,
         primary_key: &str,
     ) -> Result<Arc<dyn CrudRepository>, RepositoryError> {
+        let keys = [primary_key.to_string()];
         self.build_crud_repo_with_mapping(
             table,
-            primary_key,
+            &keys,
             None,
             &[],
             &BTreeMap::new(),
@@ -85,7 +86,7 @@ impl OpenDatasource {
     pub fn build_crud_repo_with_mapping(
         &self,
         table: &str,
-        primary_key: &str,
+        primary_keys: &[String],
         entity_map: Option<&EntityFieldMap>,
         middlewares: &[Arc<dyn DataSourceMiddleware>],
         column_datasource_types: &BTreeMap<String, String>,
@@ -95,7 +96,7 @@ impl OpenDatasource {
             self.dialect(),
             self.as_datasource(),
             table,
-            primary_key,
+            primary_keys,
             entity_map,
             middlewares,
             column_datasource_types,
@@ -109,20 +110,20 @@ pub fn build_crud_repo_for_datasource(
     dialect: DialectKind,
     datasource: Arc<dyn Datasource>,
     table: &str,
-    primary_key: &str,
+    primary_keys: &[String],
     entity_map: Option<&EntityFieldMap>,
     middlewares: &[Arc<dyn DataSourceMiddleware>],
     column_datasource_types: &BTreeMap<String, String>,
     id_type: IdType,
 ) -> Result<Arc<dyn CrudRepository>, RepositoryError> {
     let translator = Arc::new(FieldMappingTranslator::new(entity_map)?);
-    let physical_pk = translator.to_physical(primary_key);
     let converters = default_field_converters_for_dialect(column_datasource_types, &dialect);
+    let custom_keys = primary_keys != ["id".to_string()];
     match dialect {
         DialectKind::Sqlite => {
             let mut repo = SqliteCrudRepository::new(datasource, table)?;
-            if physical_pk != "id" {
-                repo = repo.with_primary_key(&physical_pk)?;
+            if custom_keys {
+                repo = repo.with_primary_keys(primary_keys.iter().cloned())?;
             }
             repo = repo.with_id_type(id_type);
             repo = repo.with_field_mapping_translator(translator);
@@ -139,8 +140,8 @@ pub fn build_crud_repo_for_datasource(
         }
         DialectKind::Postgres => {
             let mut repo = PostgresCrudRepository::new(datasource, table)?;
-            if physical_pk != "id" {
-                repo = repo.with_primary_key(&physical_pk)?;
+            if custom_keys {
+                repo = repo.with_primary_keys(primary_keys.iter().cloned())?;
             }
             repo = repo.with_id_type(id_type);
             repo = repo.with_field_mapping_translator(translator);
@@ -157,8 +158,8 @@ pub fn build_crud_repo_for_datasource(
         }
         DialectKind::Mysql => {
             let mut repo = MysqlCrudRepository::new(datasource, table)?;
-            if physical_pk != "id" {
-                repo = repo.with_primary_key(&physical_pk)?;
+            if custom_keys {
+                repo = repo.with_primary_keys(primary_keys.iter().cloned())?;
             }
             repo = repo.with_id_type(id_type);
             repo = repo.with_field_mapping_translator(translator);
