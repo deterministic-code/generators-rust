@@ -2,8 +2,8 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
-  columnFields,
   datasourceTypesOf,
+  persistedColumnFields,
   tableKind,
 } from "@deterministic-code/generators-common/spec-types";
 import {
@@ -26,11 +26,16 @@ const rustTypeFor = (field: {
 
 class Generator extends Emit {
   from(deterministic: IDeterministic): GenerateEntry[] {
-    return datasourceTypesOf(deterministic).map((table) => this.type(table));
+    const typesByName = new Map(
+      deterministic.expandedTypes.map((t) => [t.name, t]),
+    );
+    return datasourceTypesOf(deterministic).map((table) =>
+      this.type(table, typesByName),
+    );
   }
 
-  private type(table: Type): GenerateEntry {
-    const fields = columnFields(table.fields);
+  private type(table: Type, typesByName: Map<string, Type>): GenerateEntry {
+    const fields = persistedColumnFields(table, typesByName);
     const structName = this.casing.convertTypes(table.name);
     return content(
       this.imports.datasource(table.name),

@@ -4,6 +4,8 @@ import { content, type GenerateEntry } from "@deterministic-code/generators-comm
 import {
   authoredViewTypesOf,
   datasourceTypesOf,
+  dictionaryEntryFields,
+  dictionaryOfField,
   tableKind,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
@@ -11,6 +13,7 @@ import {
   emitViewFields,
   fieldRefKind,
   isAlias,
+  isUnionEnum,
   wrapsInheritedDatasource,
 } from "./common/view-shape.ts";
 import {
@@ -48,15 +51,25 @@ class Generator extends Emit {
     );
   }
 
-  private rustTypeFor(field: TypeField): string {
+  private rustPart(field: TypeField): string {
     const refKind = fieldRefKind(field, this.typesByName);
-    let base =
-      refKind === "primitive"
-        ? convertSpecType(field.base)
-        : refKind === "datasource"
-          ? this.imports.datasourceQual(field.base)
-          : this.imports.viewQual(field.base);
-    if (field.isArray) base = `Vec<${base}>`;
+    return refKind === "primitive"
+      ? convertSpecType(field.base)
+      : refKind === "datasource"
+        ? this.imports.datasourceQual(field.base)
+        : this.imports.viewQual(field.base);
+  }
+
+  private rustTypeFor(field: TypeField): string {
+    const dict = dictionaryOfField(field, this.typesByName);
+    const entry = dict === undefined ? undefined : dictionaryEntryFields(dict);
+    let base: string;
+    if (entry !== undefined) {
+      base = `HashMap<${this.rustPart(entry.key)}, ${this.rustPart(entry.value)}>`;
+    } else {
+      base = this.rustPart(field);
+      if (field.isArray) base = `Vec<${base}>`;
+    }
     return field.isNullable ? `Option<${base}>` : base;
   }
 
@@ -67,6 +80,15 @@ class Generator extends Emit {
         rustType: this.rustTypeFor(f),
       }),
     );
+    if (isAlias(view) && fields.length > 0) {
+      return [
+        {
+          ident: "base",
+          rustType: this.imports.datasourceQual(view.name),
+        },
+        ...fields,
+      ];
+    }
     if (
       view.inherits !== undefined &&
       wrapsInheritedDatasource(view, this.datasourceNames)
@@ -84,9 +106,14 @@ class Generator extends Emit {
 
   private view(view: Type, expanded: Type | undefined): GenerateEntry {
     const structName = this.casing.convertTypes(view.name);
-    const alias = isAlias(view);
-    const isStruct = !alias;
-    const fields = this.structFields(view, expanded);
+    const isUnion = isUnionEnum(view);
+    const members = (view.union ?? []).map((name) => ({
+      variant: this.casing.convertTypes(name),
+      memberType: this.imports.viewQual(name),
+    }));
+    const fields = isUnion ? [] : this.structFields(view, expanded);
+    const alias = !isUnion && isAlias(view) && fields.length === 0;
+    const isStruct = !alias && !isUnion;
     return content(
       this.imports.view(view.name),
       fill(typeTmpl, {
@@ -95,13 +122,14 @@ class Generator extends Emit {
         descriptionDoc: this.settings.descriptionDoc,
         structName,
         datasourceType: tableKind(view),
-        target: "ShapedView",
+        target: isUnion ? "UnionView" : "ShapedView",
         fieldCount: String(isStruct ? fields.length : 0),
         isAlias: alias,
         aliasType: isAlias(view) ? this.imports.datasourceQual(view.name) : "",
-        isUnion: false,
+        isUnion,
         isStruct,
-        members: [],
+        needsHashMap: fields.some((f) => f.rustType.includes("HashMap<")),
+        members,
         fields,
       }),
     );

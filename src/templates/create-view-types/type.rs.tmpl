@@ -1,6 +1,8 @@
 // schema-version: {{schemaVersion}}
 #[allow(unused_imports)]
 use super::*;
+{{#needsHashMap}}use std::collections::HashMap;
+{{/needsHashMap}}
 {{#simpleDoc}}/// View {{structName}}.
 {{/simpleDoc}}{{#descriptionDoc}}/// View {{structName}}.
 /// Datasource type: {{datasourceType}}.

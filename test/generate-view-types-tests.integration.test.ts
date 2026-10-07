@@ -56,7 +56,7 @@ const TYPES = `types:
             type: string
   - payment:
       tags: [view_type]
-      one_of:
+      union:
         - card_payment
         - cash_payment
   - card_payment:
@@ -101,7 +101,7 @@ const TYPES = `types:
   - cash_payment:
       tags: [view_type]
       fields:
-        - amount:
+        - tendered:
             type: decimal
   - tagged:
       tags: [view_type]
@@ -114,7 +114,7 @@ const TYPES = `types:
       fields: []
   - empty_union:
       tags: [view_type]
-      one_of: []
+      union: []
   - wraps_empty:
       tags: [view_type]
       fields:
@@ -345,11 +345,11 @@ describe("generate view types tests", () => {
           `types:
   - looped:
       tags: [view_type]
-      one_of:
+      union:
         - looped
 `,
         ),
-      /cyclic view reference: looped/,
+      /circular inherit\/union involving "looped"|cyclic view reference: looped/,
     );
   });
 
