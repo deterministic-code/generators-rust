@@ -6,8 +6,10 @@ import {
   datasourceTypesOf,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
+import { isUnionEnum } from "./common/view-shape.ts";
 import {
   shapedToks,
+  viewExpr,
   type ViewTestOpts,
 } from "./common/view-test-fixtures.ts";
 import {
@@ -37,6 +39,15 @@ const shapedCases = (view: Type, opts: ViewTestOpts) => {
     });
   }
   return cases;
+};
+
+const unionCases = (view: Type, opts: ViewTestOpts) => {
+  const cls = opts.casing.convertTypes(view.name);
+  return (view.union ?? []).map((name) => ({
+    ident: opts.casing.fnIdent(`accepts_${name}_member`),
+    fixture: `${cls}::${opts.casing.convertTypes(name)}(${viewExpr(name, opts, new Set([view.name]))})`,
+    assertion: "is_ok()",
+  }));
 };
 
 class Generator extends Emit implements ViewTestOpts {
@@ -75,7 +86,9 @@ class Generator extends Emit implements ViewTestOpts {
         schemaVersion: this.settings.schemaVersion,
         typeUse: this.imports.viewQual(view.name),
         fnName: this.casing.convertFields(`validate_${view.name}`),
-        cases: shapedCases(view, this),
+        cases: isUnionEnum(view)
+          ? unionCases(view, this)
+          : shapedCases(view, this),
       }),
     );
   }

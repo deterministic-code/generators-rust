@@ -6,8 +6,10 @@ import {
   datasourceTypesOf,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
+import { isUnionEnum } from "./common/view-shape.ts";
 import {
   shapedToks,
+  viewExpr,
   type ViewTestOpts,
 } from "./common/view-test-fixtures.ts";
 import {
@@ -48,8 +50,13 @@ class Generator extends Emit implements ViewTestOpts {
   }
 
   private tests(view: Type): GenerateEntry {
-    const fields = shapedToks(view, this, new Set([view.name]));
+    const isUnion = isUnionEnum(view);
     const cls = this.casing.convertTypes(view.name);
+    const members = (view.union ?? []).map((name) => ({
+      acceptsMemberTest: this.casing.fnIdent(`accepts_${name}_member`),
+      memberExpr: `${cls}::${this.casing.convertTypes(name)}(${viewExpr(name, this, new Set([view.name]))})`,
+    }));
+    const fields = isUnion ? [] : shapedToks(view, this, new Set([view.name]));
     const fixture =
       fields.length === 0
         ? `${cls} {}`
@@ -61,11 +68,12 @@ class Generator extends Emit implements ViewTestOpts {
         schemaVersion: this.settings.schemaVersion,
         structName: cls,
         fileBase: this.casing.fileBase(view.name),
-        isShaped: true,
-        isUnion: false,
+        isShaped: !isUnion,
+        isUnion,
+        needsHashMap: fields.some((f) => f.sampleExpr.includes("HashMap")),
         fixture,
         fields,
-        members: [],
+        members,
       }),
     );
   }

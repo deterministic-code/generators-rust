@@ -4,12 +4,15 @@ import { content, type GenerateEntry } from "@deterministic-code/generators-comm
 import {
   authoredViewTypesOf,
   datasourceTypesOf,
+  dictionaryEntryFields,
+  dictionaryOfField,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
 import {
   emitViewFields,
   fieldRefKind,
   isAlias,
+  isUnionEnum,
   wrapsInheritedDatasource,
 } from "./common/view-shape.ts";
 import {
@@ -69,6 +72,16 @@ class Generator extends Emit {
   private checkField(field: TypeField): string {
     const prop = this.casing.convertFields(field.name);
     const access = `obj.${prop}`;
+    if (field.isMap === true) {
+      const dict = dictionaryOfField(field, this.typesByName);
+      const entry = dict === undefined ? undefined : dictionaryEntryFields(dict);
+      if (entry === undefined || entry.value.kind === "primitive") return "";
+      const fn = this.validatorFn(
+        entry.value.base,
+        fieldRefKind(entry.value, this.typesByName),
+      );
+      return `    for item in ${access}.values() { if let Err(mut e) = ${fn}(item) { errors.append(&mut e); } }`;
+    }
     const refKind = fieldRefKind(field, this.typesByName);
     if (refKind === "primitive") return "";
     const fn = this.validatorFn(field.base, refKind);
@@ -84,18 +97,18 @@ class Generator extends Emit {
 
   private shapedBody(view: Type, expanded: Type | undefined): string[] {
     const checks: string[] = [];
-    if (isAlias(view)) {
+    const extras = emitViewFields(view, expanded, this.datasourceNames);
+    if (isAlias(view) && extras.length === 0) {
       const fn = this.validatorFn(view.name, "datasource");
       checks.push(fill(checkRequiredTmpl, { fn, arg: "obj" }).trimEnd());
+    } else if (isAlias(view)) {
+      const fn = this.validatorFn(view.name, "datasource");
+      checks.push(fill(checkRequiredTmpl, { fn, arg: "&obj.base" }).trimEnd());
     } else if (wrapsInheritedDatasource(view, this.datasourceNames)) {
       const fn = this.validatorFn(view.inherits!, "datasource");
       checks.push(fill(checkRequiredTmpl, { fn, arg: "&obj.base" }).trimEnd());
     }
-    for (const line of emitViewFields(
-      view,
-      expanded,
-      this.datasourceNames,
-    ).map((f) => this.checkField(f))) {
+    for (const line of extras.map((f) => this.checkField(f))) {
       if (line !== "") checks.push(line);
     }
     return checks;
@@ -104,19 +117,28 @@ class Generator extends Emit {
   private view(view: Type, expanded: Type | undefined): GenerateEntry {
     const fnName = this.casing.convertFields(`validate_${view.name}`);
     const path = this.imports.viewValidator(view.name);
-    const checks = this.shapedBody(view, expanded);
+    const isUnion = isUnionEnum(view);
+    const enumName = this.casing.convertTypes(view.name);
+    const arms = (view.union ?? []).map((name) => {
+      const variant = this.casing.convertTypes(name);
+      const fn = this.validatorFn(name, "view");
+      return {
+        arm: `${enumName}::${variant}(inner) => ${fn}(inner),`,
+      };
+    });
+    const checks = isUnion ? [] : this.shapedBody(view, expanded);
     return content(
       path,
       fill(typeTmpl, {
         schemaVersion: this.settings.schemaVersion,
-        isUnion: false,
-        isShaped: true,
+        isUnion,
+        isShaped: !isUnion,
         fnName,
         typePath: this.typePath(view.name, "view"),
         paramName: checks.length > 0 ? "obj" : "_obj",
         hasChecks: checks.length > 0,
         checks: checks.map((line) => ({ line })),
-        arms: [],
+        arms,
       }),
     );
   }

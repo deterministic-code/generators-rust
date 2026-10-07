@@ -2,6 +2,8 @@
 #[cfg(test)]
 mod tests {
     use super::{{fileBase}}::*;
+{{#needsHashMap}}    use std::collections::HashMap;
+{{/needsHashMap}}
 
 {{#isShaped}}
     fn sample() -> {{structName}} {
