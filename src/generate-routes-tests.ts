@@ -82,7 +82,6 @@ class Generator extends Emit {
     const mountPath = `/api/${this.imports.apiPath(candidate.name)}`;
     const occ = this.settings.usesOptimisticConcurrency({
       tags: type?.tags ?? candidate.tags,
-      useOptimisticConcurrency: table?.useOptimisticConcurrency,
     });
     const fileBase = this.imports.routeModule(candidate.name);
     const columns =

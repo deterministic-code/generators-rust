@@ -387,10 +387,8 @@ class Generator extends Emit {
       directFkChildren,
     );
     const type = this.typeOf(candidate.name);
-    const table = this.tables.get(candidate.name);
     const occ = this.settings.usesOptimisticConcurrency({
       tags: type?.tags ?? candidate.tags,
-      useOptimisticConcurrency: table?.useOptimisticConcurrency,
     });
     const tokens = {
       serviceImport: this.imports.serviceUse(entitySnake, className),
