@@ -143,7 +143,7 @@ class Generator extends Emit {
   }
 
   private validator(table: Type): GenerateEntry {
-    const lines = columnFields(table.fields).flatMap((field) => {
+    const lines = columnFields(table.fields).flatMap((field) =>
       checksForField(field, this.casing, isPkField(field, table)),
     );
     const has = lines.length > 0;
