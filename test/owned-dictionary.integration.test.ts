@@ -30,7 +30,7 @@ const TYPES = `types:
         - value:
             type: string
             size: unlimited
-  - locale_pref:
+  - locale_preferences:
       tags: [view_type]
       fields:
         - locale:
@@ -39,7 +39,7 @@ const TYPES = `types:
         - timezone:
             type: string
             size: 64
-  - contact_prefs:
+  - contact_preferences:
       tags: [datasource_type]
       inherits: dictionary
       fields:
@@ -50,7 +50,7 @@ const TYPES = `types:
             type: string
             size: 64
         - value:
-            type: locale_pref
+            type: locale_preferences
   - contacts_ds:
       tags: [datasource_type]
       inherits: set
@@ -63,8 +63,8 @@ const TYPES = `types:
       inherits: contacts_ds
       fields:
         - prefs:
-            type: contact_prefs{}
-            references: contact_prefs.key
+            type: contact_preferences{}
+            references: contact_preferences.key
   - card_labels:
       tags: [view_type]
       inherits: dictionary
@@ -133,7 +133,7 @@ describe("owned dictionary codegen", () => {
     const file = bodyEnding(entries, "file.rs");
     assert.doesNotMatch(file, /settings/);
     assert.doesNotMatch(file, /HashMap</);
-    const prefs = bodyEnding(entries, "contactPrefs.rs");
+    const prefs = bodyEnding(entries, "contactPreferences.rs");
     assert.match(prefs, /pub locale:/);
     assert.match(prefs, /pub timezone:/);
     assert.doesNotMatch(prefs, /pub value:/);
@@ -143,17 +143,17 @@ describe("owned dictionary codegen", () => {
     const entries = indexEntries(await generateViewTypes(ctx));
     assert.equal(hasEnding(entries, "settings.rs"), false);
     assert.equal(hasEnding(entries, "cardLabels.rs"), false);
-    assert.equal(hasEnding(entries, "contactPrefs.rs"), false);
+    assert.equal(hasEnding(entries, "contactPreferences.rs"), false);
     const file = bodyEnding(entries, "file.rs");
     assert.match(file, /use std::collections::HashMap;/);
     assert.match(file, /pub struct File/);
     assert.match(file, /pub settings: HashMap<String, String>/);
     const contact = bodyEnding(entries, "contact.rs");
     assert.match(contact, /pub prefs: HashMap<String, /);
-    assert.match(contact, /LocalePref/);
+    assert.match(contact, /LocalePreferences/);
     const card = bodyEnding(entries, "contactCard.rs");
     assert.match(card, /pub labels: HashMap<String, String>/);
-    const locale = bodyEnding(entries, "localePref.rs");
-    assert.match(locale, /pub struct LocalePref/);
+    const locale = bodyEnding(entries, "localePreferences.rs");
+    assert.match(locale, /pub struct LocalePreferences/);
   });
 });
