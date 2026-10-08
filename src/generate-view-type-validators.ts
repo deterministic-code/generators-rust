@@ -75,11 +75,10 @@ class Generator extends Emit {
     if (field.isMap === true) {
       const dict = dictionaryOfField(field, this.typesByName);
       const entry = dict === undefined ? undefined : dictionaryEntryFields(dict);
-      if (entry === undefined || entry.value.kind === "primitive") return "";
-      const fn = this.validatorFn(
-        entry.value.base,
-        fieldRefKind(entry.value, this.typesByName),
-      );
+      if (entry === undefined) return "";
+      const refKind = fieldRefKind(entry.value, this.typesByName);
+      if (refKind === "primitive") return "";
+      const fn = this.validatorFn(entry.value.base, refKind);
       return `    for item in ${access}.values() { if let Err(mut e) = ${fn}(item) { errors.append(&mut e); } }`;
     }
     const refKind = fieldRefKind(field, this.typesByName);
