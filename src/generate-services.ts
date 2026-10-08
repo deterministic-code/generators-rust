@@ -8,6 +8,7 @@ import {
   type ServiceCandidate,
   type IDeterministic,
 } from "./specification-parser.ts";
+import { isDictionaryCandidate } from "./common/dictionary-candidate.ts";
 import { customStubTmpl, genericTmpl } from "./resources/services.ts";
 import { Emit } from "./emit.ts";
 
@@ -28,7 +29,10 @@ const useJsonMacro = (serviceName: string): boolean =>
 
 class Generator extends Emit {
   from(deterministic: IDeterministic): GenerateEntry[] {
-    const { generics, customs } = deterministic.services;
+    const customs = deterministic.services.customs;
+    const generics = deterministic.services.generics.filter(
+      (c) => !isDictionaryCandidate(c),
+    );
     return [
       ...generics.map((c) => this.generic(c)),
       ...customs.map((c) => this.custom(c)),

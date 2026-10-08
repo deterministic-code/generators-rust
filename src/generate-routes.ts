@@ -8,6 +8,7 @@ import {
   tableByName,
 } from "@deterministic-code/generators-common/spec-types";
 import { convertSpecType } from "./base-type-converter.ts";
+import { isDictionaryCandidate } from "./common/dictionary-candidate.ts";
 import {
   DeterministicParser,
   ROUTES_YAML,
@@ -309,12 +310,14 @@ class Generator extends Emit {
   }
 
   from(deterministic: IDeterministic): GenerateEntry[] {
-    const parsed = deterministic.routes;
-    const entries: GenerateEntry[] = parsed.candidates.map((c) =>
+    const candidates = deterministic.routes.candidates.filter(
+      (c) => !isDictionaryCandidate(c),
+    );
+    const entries: GenerateEntry[] = candidates.map((c) =>
       this.entityRouter(c),
     );
-    if (parsed.candidates.length > 0) {
-      entries.push(this.appWiring(parsed.candidates));
+    if (candidates.length > 0) {
+      entries.push(this.appWiring(candidates));
     }
     return entries;
   }

@@ -7,6 +7,7 @@ import {
   tableByName,
 } from "@deterministic-code/generators-common/spec-types";
 import { DeterministicParser, SERVICES_YAML, type IDeterministic } from "./specification-parser.ts";
+import { isDictionaryCandidate } from "./common/dictionary-candidate.ts";
 import { genericTmpl } from "./resources/service-tests.ts";
 import { Emit } from "./emit.ts";
 
@@ -32,19 +33,21 @@ class Generator extends Emit {
   from(deterministic: IDeterministic): GenerateEntry[] {
     const tables = tableByName(deterministic);
     const types = datasourceTypesOf(deterministic);
-    return deterministic.services.generics.map((c) => {
-      const type = types.find((t) => t.name === c.name);
-      const columns =
-        type !== undefined ? identityColumns(type, tables.get(c.name)) : ["id"];
-      return content(
-        this.imports.serviceTest(c.name),
-        fill(genericTmpl, {
-          structName: this.casing.serviceClassName(c.name),
-          fileBase: this.casing.fileBase(`${c.name}_service`),
-          missingId: missingIdentityJson(type, columns),
-        }),
-      );
-    });
+    return deterministic.services.generics
+      .filter((c) => !isDictionaryCandidate(c))
+      .map((c) => {
+        const type = types.find((t) => t.name === c.name);
+        const columns =
+          type !== undefined ? identityColumns(type, tables.get(c.name)) : ["id"];
+        return content(
+          this.imports.serviceTest(c.name),
+          fill(genericTmpl, {
+            structName: this.casing.serviceClassName(c.name),
+            fileBase: this.casing.fileBase(`${c.name}_service`),
+            missingId: missingIdentityJson(type, columns),
+          }),
+        );
+      });
   }
 }
 
