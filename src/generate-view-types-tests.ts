@@ -52,10 +52,12 @@ class Generator extends Emit implements ViewTestOpts {
   private tests(view: Type): GenerateEntry {
     const isUnion = isUnionEnum(view);
     const cls = this.casing.convertTypes(view.name);
-    const members = (view.union ?? []).map((name) => ({
-      acceptsMemberTest: this.casing.fnIdent(`accepts_${name}_member`),
-      memberExpr: `${cls}::${this.casing.convertTypes(name)}(${viewExpr(name, this, new Set([view.name]))})`,
-    }));
+    const members = isUnion
+      ? (view.union ?? []).map((name) => ({
+          acceptsMemberTest: this.casing.fnIdent(`accepts_${name}_member`),
+          memberExpr: `${cls}::${this.casing.convertTypes(name)}(${viewExpr(name, this, new Set([view.name]))})`,
+        }))
+      : [];
     const fields = isUnion ? [] : shapedToks(view, this, new Set([view.name]));
     const fixture =
       fields.length === 0

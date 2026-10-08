@@ -2,8 +2,8 @@ import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
-  columnFields,
   datasourceTypesOf,
+  persistedColumnFields,
 } from "@deterministic-code/generators-common/spec-types";
 import type { PackCasing } from "./common/default-casing.ts";
 import {
@@ -103,11 +103,18 @@ const casesFor = (cls: string, fields: FieldTok[]): CaseTok[] => {
 
 class Generator extends Emit {
   from(deterministic: IDeterministic): GenerateEntry[] {
-    return datasourceTypesOf(deterministic).map((table) => this.tests(table));
+    const typesByName = new Map(
+      deterministic.expandedTypes.map((t) => [t.name, t]),
+    );
+    return datasourceTypesOf(deterministic).map((table) =>
+      this.tests(table, typesByName),
+    );
   }
 
-  private tests(table: Type): GenerateEntry {
-    const fields = columnFields(table.fields).map((f) => fieldTok(f, this.casing));
+  private tests(table: Type, typesByName: Map<string, Type>): GenerateEntry {
+    const fields = persistedColumnFields(table, typesByName).map((f) =>
+      fieldTok(f, this.casing),
+    );
     const cls = this.casing.convertTypes(table.name);
     const src = this.imports.datasource(table.name);
     return content(
