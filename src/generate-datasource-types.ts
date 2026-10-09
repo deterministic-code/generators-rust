@@ -3,6 +3,7 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
   datasourceTypesOf,
+  fieldTypeOf,
   persistedColumnFields,
   tableKind,
 } from "@deterministic-code/generators-common/spec-types";
@@ -11,16 +12,17 @@ import {
   TYPES_YAML,
   type IDeterministic,
   type Type,
+  type TypeField,
 } from "./specification-parser.ts";
 import { convertSpecType } from "./base-type-converter.ts";
 import { typeTmpl } from "./resources/datasource-types.ts";
 import { Emit } from "./emit.ts";
 
-const rustTypeFor = (field: {
-  type: string;
-  isNullable: boolean;
-}): string => {
-  const t = convertSpecType(field.type);
+const rustTypeFor = (
+  field: TypeField,
+  typesByName: ReadonlyMap<string, Type>,
+): string => {
+  const t = convertSpecType(fieldTypeOf(field, typesByName));
   return field.isNullable ? `Option<${t}>` : t;
 };
 
@@ -48,7 +50,7 @@ class Generator extends Emit {
         fieldCount: String(fields.length),
         fields: fields.map((f) => ({
           ident: this.casing.convertFields(f.name),
-          rustType: rustTypeFor(f),
+          rustType: rustTypeFor(f, typesByName),
         })),
       }),
     );
