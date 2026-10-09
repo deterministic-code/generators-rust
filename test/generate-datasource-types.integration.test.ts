@@ -90,4 +90,29 @@ describe("generate", () => {
     assert.match(user, /pub email: String,/);
     assert.match(user, /pub role_id: i32,/);
   });
+
+  it("infers FK type from the referenced parent field", async () => {
+    const byName = indexEntries(
+      await generate({
+        reader: memoryReader({
+          [TYPES_YAML]: `types:
+  - parent:
+      tags: [datasource_type]
+      inherits: set
+      fields: []
+  - child:
+      tags: [datasource_type]
+      inherits: set
+      fields:
+        - owner_id:
+            references: parent.id
+`,
+        }),
+        settings: { application_name: "catalog-api" },
+      }),
+    );
+    const child = entryBody(requireEntry(byName, "child.rs"));
+    assert.match(child, /pub owner_id: i32,/);
+    assert.doesNotMatch(child, /pub owner_id: String/);
+  });
 });

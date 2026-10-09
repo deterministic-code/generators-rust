@@ -4,6 +4,7 @@ import { content, type GenerateEntry } from "@deterministic-code/generators-comm
 import {
   columnFields,
   datasourceTypesOf,
+  fieldTypeOf,
   isPkField,
 } from "@deterministic-code/generators-common/spec-types";
 import type { PackCasing } from "./common/default-casing.ts";
@@ -137,14 +138,24 @@ const checksForField = (
 
 class Generator extends Emit {
   from(deterministic: IDeterministic): GenerateEntry[] {
+    const typesByName = new Map(
+      deterministic.expandedTypes.map((t) => [t.name, t]),
+    );
     return datasourceTypesOf(deterministic).map((table) =>
-      this.validator(table),
+      this.validator(table, typesByName),
     );
   }
 
-  private validator(table: Type): GenerateEntry {
+  private validator(
+    table: Type,
+    typesByName: ReadonlyMap<string, Type>,
+  ): GenerateEntry {
     const lines = columnFields(table.fields).flatMap((field) =>
-      checksForField(field, this.casing, isPkField(field, table)),
+      checksForField(
+        { ...field, type: fieldTypeOf(field, typesByName) },
+        this.casing,
+        isPkField(field, table),
+      ),
     );
     const has = lines.length > 0;
     return content(

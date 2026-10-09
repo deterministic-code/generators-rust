@@ -3,6 +3,7 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
   datasourceTypesOf,
+  fieldTypeOf,
   persistedColumnFields,
 } from "@deterministic-code/generators-common/spec-types";
 import type { PackCasing } from "./common/default-casing.ts";
@@ -38,17 +39,19 @@ type CaseTok = {
 };
 
 const fieldTok = (
-  field: TypeField | { name: string; type: string; isNullable: boolean },
+  field: TypeField,
   casing: PackCasing,
+  typesByName: ReadonlyMap<string, Type>,
 ): FieldTok => {
-  const native = convertSpecType(field.type);
-  const { sample } = samplesForNative(native, field.type);
+  const specType = fieldTypeOf(field, typesByName);
+  const native = convertSpecType(specType);
+  const { sample } = samplesForNative(native, specType);
   return {
     name: field.name,
     ident: casing.convertFields(field.name),
     sampleExpr: wrapOption(sample, field.isNullable),
     isNullable: field.isNullable,
-    type: field.type,
+    type: specType,
     native,
   };
 };
@@ -113,7 +116,7 @@ class Generator extends Emit {
 
   private tests(table: Type, typesByName: Map<string, Type>): GenerateEntry {
     const fields = persistedColumnFields(table, typesByName).map((f) =>
-      fieldTok(f, this.casing),
+      fieldTok(f, this.casing, typesByName),
     );
     const cls = this.casing.convertTypes(table.name);
     const src = this.imports.datasource(table.name);
