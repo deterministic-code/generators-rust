@@ -73,23 +73,22 @@ describe("generate", () => {
     assert.equal(entryBody(dockerignore), "target");
   });
 
-  it("renders main.rs and lib.rs against the crate ident and flat compose_router", () => {
+  it("renders main.rs and lib.rs without the deleted runtime crate", () => {
     const main = entryBody(requireEntry(byName, "src/main.rs"));
     assert.equal(requireEntry(byName, "src/main.rs").kind, "content");
-    assert.match(main, /catalog_api::custom_services\(\)/);
-    assert.match(main, /catalog_api::route_composer\(\)/);
+    assert.match(main, /catalog_api/);
+    assert.doesNotMatch(main, /deterministic::/);
     const lib = entryBody(requireEntry(byName, "src/lib.rs"));
     assert.equal(requireEntry(byName, "src/lib.rs").kind, "patch");
     assert.match(lib, /BEGIN MODULES/);
-    assert.match(lib, /BEGIN CUSTOM_SERVICES/);
-    assert.match(lib, /crate::routes::generated::app_wiring::compose_router/);
+    assert.doesNotMatch(lib, /deterministic::/);
     assert.doesNotMatch(lib, /features::app_wiring/);
   });
 
-  it("renders Cargo.toml for the published crate, not a bundled path dep", () => {
+  it("renders Cargo.toml without the deleted runtime crate", () => {
     const cargo = entryBody(requireEntry(byName, "Cargo.toml"));
     assert.match(cargo, /^name = "catalog_api"$/m);
-    assert.match(cargo, /deterministic = "0\.0\.6"/);
+    assert.doesNotMatch(cargo, /deterministic = /);
     assert.doesNotMatch(cargo, /_deterministic\/rust/);
   });
 

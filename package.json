@@ -1,7 +1,7 @@
 {
   "name": "@deterministic-code/rust-generators",
   "version": "0.0.1",
-  "description": "Rust generator pack for the deterministic toolchain: the emit-*-rust lane modules and the deterministic runtime crate.",
+  "description": "Rust generator pack for the deterministic toolchain.",
   "type": "module",
   "exports": {
     "./package.json": "./package.json",
@@ -93,7 +93,6 @@
   "files": [
     "dist",
     "src",
-    "rust",
     "tsconfig.build.json"
   ],
   "scripts": {

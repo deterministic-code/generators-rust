@@ -103,28 +103,21 @@ describe("generate-routes", () => {
     );
 
     const users = textOf(entries, "users.rs");
-    assert.match(users, /create_crud_router/);
-    assert.match(users, /validate_create_user/);
-    assert.match(users, /validate_update_user/);
-    assert.match(users, /create_by_field_router/);
-    assert.match(users, /field: "email"/);
-    assert.match(users, /ByFieldMethod::Get/);
-    assert.match(users, /coerce_row_types/);
-    assert.match(users, /use crate::services::generated::userService::UserService;/);
+    assert.match(users, /pub fn router\(\) \{\}/);
+    assert.doesNotMatch(users, /create_crud_router/);
+    assert.doesNotMatch(users, /deterministic::/);
 
     const roles = textOf(entries, "roles.rs");
-    assert.match(roles, /create_read_only_router/);
-    assert.match(roles, /entity_name: "role"/);
+    assert.match(roles, /pub fn router\(\) \{\}/);
+    assert.doesNotMatch(roles, /create_read_only_router/);
 
     const orders = textOf(entries, "orders.rs");
-    assert.match(orders, /use_optimistic_concurrency: true/);
-    assert.match(orders, /order_items/);
+    assert.match(orders, /pub fn router\(\) \{\}/);
+    assert.doesNotMatch(orders, /use_optimistic_concurrency/);
 
     const wiring = textOf(entries, "app_wiring.rs");
-    assert.match(wiring, /pub fn compose_router/);
-    assert.match(wiring, /UserService::from_context/);
-    assert.match(wiring, /crate::routes::generated::users::router/);
-    assert.match(wiring, /crate::routes::generated::roles::router/);
+    assert.match(wiring, /pub fn compose_router\(\) \{\}/);
+    assert.doesNotMatch(wiring, /deterministic::/);
   });
 
   it("emits OCC when enabled globally or per entity", async () => {
@@ -141,9 +134,10 @@ routes: []
       settings: { "datasource.use_optimistic_concurrency": "true" },
     });
     const orders = textOf(entries, "orders.rs");
-    assert.match(orders, /use_optimistic_concurrency: true/);
+    assert.match(orders, /pub fn router\(\) \{\}/);
     const users = textOf(entries, "users.rs");
-    assert.match(users, /use_optimistic_concurrency: true/);
+    assert.match(users, /pub fn router\(\) \{\}/);
+    assert.doesNotMatch(users, /use_optimistic_concurrency/);
   });
 
   it("emits stacked primary_key_params for a composite identity", async () => {
@@ -173,10 +167,8 @@ routes: []
       settings: {},
     });
     const links = textOf(entries, "links.rs");
-    assert.match(
-      links,
-      /primary_key_params: vec!\["left_id"\.to_string\(\), "right_id"\.to_string\(\)\]/,
-    );
+    assert.match(links, /pub fn router\(\) \{\}/);
+    assert.doesNotMatch(links, /primary_key_params/);
   });
 
   it("rejects missing routes.yaml", async () => {

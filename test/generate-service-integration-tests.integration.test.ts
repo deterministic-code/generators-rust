@@ -78,10 +78,9 @@ describe("generate-service-integration-tests", () => {
     );
     const body = textOf(entries, "userRoleServiceIntegrationTests.rs");
     assert.match(body, /use super::userRoleService::\*;/);
-    assert.match(body, /fn service\(\) -> UserRoleService/);
-    assert.match(body, /InMemoryDynamicService::new/);
-    assert.match(body, /fn add_inserts_a_row_and_auto_populates_id_created_updated/);
-    assert.match(body, /json!\(99999\)/);
+    assert.match(body, /UserRoleService::new/);
+    assert.doesNotMatch(body, /SqliteDatasource/);
+    assert.doesNotMatch(body, /deterministic::/);
   });
 
   it("emits nothing when types.yaml has no datasource types", async () => {

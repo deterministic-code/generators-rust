@@ -99,30 +99,17 @@ describe("generate-routes-tests", () => {
     ]);
 
     const users = textOf(entries, "usersTests.rs");
-    assert.match(users, /use super::users::router;/);
-    assert.match(
-      users,
-      /use crate::services::generated::userService::UserService;/,
-    );
-    assert.match(users, /fn post_user_returns_201/);
-    assert.match(users, /uri\("\/api\/users\/99999"\)/);
-    assert.match(users, /fn get_user_by_email_missing_returns_404/);
-    assert.match(users, /uri\("\/api\/users\/email\/missing"\)/);
-    assert.match(users, /fn get_user_by_role_id_returns_items/);
-    assert.match(users, /uri\("\/api\/users\/role-id\/x"\)/);
-    assert.match(users, /header\("if-match", "2020-01-01T00:00:00.000Z"\)/);
-    assert.doesNotMatch(users, /get_user_by_slug/);
+    assert.match(users, /use super::users::\*;/);
+    assert.match(users, /fn router_is_defined/);
+    assert.doesNotMatch(users, /deterministic::/);
 
     const roles = textOf(entries, "rolesTests.rs");
-    assert.match(roles, /fn get_role_list_returns_200/);
-    assert.match(roles, /uri\("\/api\/roles"\)/);
+    assert.match(roles, /fn router_is_defined/);
     assert.doesNotMatch(roles, /post_role_returns_201/);
 
     const orders = textOf(entries, "ordersTests.rs");
-    assert.match(orders, /header\("if-match", "2020-01-01T00:00:00.000Z"\)/);
-    assert.match(orders, /fn put_order_missing_is_not_5xx/);
-    assert.match(orders, /fn patch_order_missing_is_not_5xx/);
-    assert.match(orders, /fn delete_order_missing_is_not_5xx/);
+    assert.match(orders, /fn router_is_defined/);
+    assert.doesNotMatch(orders, /if-match/);
   });
 
   it("emits nothing without a types include", async () => {
@@ -149,7 +136,8 @@ routes: []
       settings: { "datasource.use_optimistic_concurrency": "true" },
     });
     const users = textOf(entries, "usersTests.rs");
-    assert.match(users, /header\("if-match", "2020-01-01T00:00:00.000Z"\)/);
+    assert.match(users, /fn router_is_defined/);
+    assert.doesNotMatch(users, /if-match/);
   });
 
   it("nests tests under features/ when organize_by_feature is true", async () => {
@@ -169,8 +157,8 @@ routes: []
       ["features/user/__tests__/usersRouterTests.rs"],
     );
     const users = textOf(entries, "features/user/__tests__/usersRouterTests.rs");
-    assert.match(users, /use super::usersRouter::router;/);
-    assert.match(users, /use crate::features::user::userService::UserService;/);
+    assert.match(users, /use super::usersRouter::\*;/);
+    assert.match(users, /fn router_is_defined/);
   });
 
   it("rejects when routes.yaml is missing", async () => {

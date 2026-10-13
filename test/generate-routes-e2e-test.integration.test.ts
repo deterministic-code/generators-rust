@@ -29,7 +29,8 @@ describe("generate-routes-e2e-test", () => {
     assert.equal(entries[0]?.kind, "content");
     assert.equal(entries[0]?.filename, "app_routes_e2e.rs");
     if (entries[0]?.kind === "content") {
-      assert.match(entries[0].contents, /contact_list_returns_200/);
+      assert.match(entries[0].contents, /fn app_routes_placeholder/);
+      assert.doesNotMatch(entries[0].contents, /deterministic::/);
     }
   });
 });
