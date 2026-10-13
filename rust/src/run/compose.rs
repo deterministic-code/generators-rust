@@ -34,8 +34,7 @@ impl std::fmt::Debug for RouteComposer {
 }
 
 /// Handed to a [`RouteComposer`]: exposes the runtime's composed service registry so a generated
-/// service facade can pull its fully-composed stack (GenericCrudService → enrich → eager-write →
-/// eager-read) by name, keeping the generated code a thin typed adapter over that stack.
+/// service facade can pull the registered DynamicService by name, keeping generated code a thin typed adapter.
 pub struct ComposeContext {
     registry: ServiceRegistry,
 }
@@ -62,15 +61,12 @@ impl ComposeContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repositories::inmemory::InMemoryCrudRepository;
-    use crate::services::GenericCrudService;
+    use crate::services::InMemoryDynamicService;
     use crate::ServiceRegistryBuilder;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     fn registry_with(entity: &str) -> ServiceRegistry {
-        let svc: Arc<dyn DynamicService> = Arc::new(GenericCrudService::new(Arc::new(
-            InMemoryCrudRepository::new(),
-        )));
+        let svc: Arc<dyn DynamicService> = Arc::new(InMemoryDynamicService::new());
         ServiceRegistryBuilder::new().register(entity, svc).build()
     }
 

@@ -1,6 +1,6 @@
 fn {{setupFn}}() -> axum::Router {
     let svc: std::sync::Arc<dyn DynamicService> = std::sync::Arc::new(
-        GenericCrudService::new(std::sync::Arc::new(InMemoryCrudRepository::new())),
+        InMemoryDynamicService::new(),
     );
     let registry = ServiceRegistryBuilder::new()
         .register("{{entity}}", svc)

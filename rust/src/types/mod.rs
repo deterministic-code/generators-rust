@@ -1,3 +1,3 @@
-pub mod standard_table;
+pub mod row_map;
 
-pub use standard_table::StandardTable;
+pub use row_map::RowMap;

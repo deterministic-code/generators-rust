@@ -9,30 +9,17 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 
 use crate::error::RepositoryError;
-use crate::repositories::{CrudRepository, RowMap};
 use crate::routes::crud::{EnrichItemFn, EnrichItemsFn};
 use crate::routes::helpers::{
     internal_error, normalize_base, not_found, parse_id, row_map_to_value, run_enrich_item_hook,
     run_enrich_items_hook, validation_error, IdType,
 };
+use crate::types::RowMap;
 
 #[async_trait]
 pub trait ReadOnlyService: Send + Sync + 'static {
     async fn find_all(&self) -> Result<Vec<RowMap>, RepositoryError>;
     async fn find(&self, id: &Value) -> Result<Option<RowMap>, RepositoryError>;
-}
-
-#[async_trait]
-impl<R> ReadOnlyService for R
-where
-    R: CrudRepository + 'static,
-{
-    async fn find_all(&self) -> Result<Vec<RowMap>, RepositoryError> {
-        CrudRepository::find_all(self).await
-    }
-    async fn find(&self, id: &Value) -> Result<Option<RowMap>, RepositoryError> {
-        CrudRepository::find(self, id).await
-    }
 }
 
 pub struct ReadOnlyRouterConfig {

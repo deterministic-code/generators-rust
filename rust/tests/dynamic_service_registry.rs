@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use deterministic::repositories::inmemory::InMemoryCrudRepository;
-use deterministic::{DynamicService, GenericCrudService};
+use deterministic::{DynamicService, InMemoryDynamicService};
 use serde_json::{json, Value};
 
 type Registry = HashMap<String, Arc<dyn DynamicService>>;
@@ -10,9 +9,7 @@ type Registry = HashMap<String, Arc<dyn DynamicService>>;
 fn build_registry(entity_names: &[&str]) -> Registry {
     let mut reg: Registry = HashMap::new();
     for name in entity_names {
-        let service: Arc<dyn DynamicService> = Arc::new(GenericCrudService::new(Arc::new(
-            InMemoryCrudRepository::new(),
-        )));
+        let service: Arc<dyn DynamicService> = Arc::new(InMemoryDynamicService::new());
         reg.insert((*name).to_string(), service);
     }
     reg

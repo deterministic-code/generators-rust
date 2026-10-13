@@ -11,11 +11,11 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 use deterministic::error::RepositoryError;
-use deterministic::repositories::RowMap;
 use deterministic::routes::{
     create_crud_router, CoerceRowFn, CrudRouterConfig, CrudService, EnrichItemFn, EnrichItemsFn,
     IdType, ResolveItemFn, ValidatorFn,
 };
+use deterministic::types::RowMap;
 
 #[derive(Default)]
 struct MapService {
@@ -435,7 +435,13 @@ async fn composite_patch_updates_by_both_keys() {
 #[tokio::test(flavor = "current_thread")]
 async fn composite_delete_removes_by_both_keys() {
     let (svc, _) = seeded_link();
-    let (status, body) = send(composite_router(svc), Method::DELETE, "/api/links/1/2", None).await;
+    let (status, body) = send(
+        composite_router(svc),
+        Method::DELETE,
+        "/api/links/1/2",
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["success"], json!(true));
 }

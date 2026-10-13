@@ -2,6 +2,9 @@ use async_trait::async_trait;
 use serde_json::Value;
 use thiserror::Error;
 
+/// Reserved args key carrying the request's `If-Match` value from the dispatch layer to the service.
+pub const IF_MATCH_ARG: &str = "__if_match";
+
 #[derive(Debug, Error)]
 pub enum ServiceError {
     #[error("unknown method: {0}")]

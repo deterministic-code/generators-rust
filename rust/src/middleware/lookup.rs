@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use thiserror::Error;
 
-use crate::repositories::datasource_middleware::DataSourceMiddleware;
+use crate::middleware::DataSourceMiddleware;
 use crate::services::ServiceMiddleware;
 
 use super::data_source_console_logger_middleware::DataSourceConsoleLoggerMiddleware;
@@ -125,7 +125,7 @@ mod tests {
     use serde_json::Value;
 
     use crate::error::RepositoryError;
-    use crate::repositories::datasource_middleware::{DatabaseBackend, RewrittenQuery};
+    use crate::middleware::{DatabaseBackend, RewrittenQuery};
     use crate::services::ServiceError;
 
     struct FakeServiceMiddleware;

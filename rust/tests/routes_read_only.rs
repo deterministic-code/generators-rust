@@ -8,19 +8,19 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
-use deterministic::repositories::inmemory::InMemoryCrudRepository;
-use deterministic::repositories::{CrudRepository, RowMap};
-use deterministic::routes::{create_read_only_router, IdType, ReadOnlyRouterConfig};
+use deterministic::routes::{create_read_only_router, CrudService, IdType, ReadOnlyRouterConfig};
+use deterministic::services::InMemoryDynamicService;
+use deterministic::types::RowMap;
 
-async fn seed(repo: &InMemoryCrudRepository, count: usize) {
+async fn seed(repo: &InMemoryDynamicService, count: usize) {
     for i in 1..=count {
         let mut row = RowMap::new();
         row.insert("name".to_string(), Value::String(format!("user-{}", i)));
-        repo.add(row).await.unwrap();
+        CrudService::add(repo, row).await.unwrap();
     }
 }
 
-fn generated_app(repo: Arc<InMemoryCrudRepository>) -> Router {
+fn generated_app(repo: Arc<InMemoryDynamicService>) -> Router {
     create_read_only_router(ReadOnlyRouterConfig {
         service: repo,
         entity_name: "User".to_string(),
@@ -38,7 +38,7 @@ fn custom_router() -> Router {
     )
 }
 
-fn merged_app(repo: Arc<InMemoryCrudRepository>) -> Router {
+fn merged_app(repo: Arc<InMemoryDynamicService>) -> Router {
     Router::new()
         .merge(generated_app(repo))
         .merge(custom_router())
@@ -67,7 +67,7 @@ async fn json_get(app: Router, uri: &str) -> (StatusCode, Value) {
 
 #[tokio::test]
 async fn generated_list_returns_empty_items_when_repo_has_no_rows() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     let (status, body) = json_get(merged_app(repo), "/api/users").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, json!({ "items": [] }));
@@ -75,7 +75,7 @@ async fn generated_list_returns_empty_items_when_repo_has_no_rows() {
 
 #[tokio::test]
 async fn generated_list_returns_one_item() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 1).await;
     let (status, body) = json_get(merged_app(repo), "/api/users").await;
     assert_eq!(status, StatusCode::OK);
@@ -87,7 +87,7 @@ async fn generated_list_returns_one_item() {
 
 #[tokio::test]
 async fn generated_list_returns_all_ten_items() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 10).await;
     let (status, body) = json_get(merged_app(repo), "/api/users").await;
     assert_eq!(status, StatusCode::OK);
@@ -99,7 +99,7 @@ async fn generated_list_returns_all_ten_items() {
 
 #[tokio::test]
 async fn generated_get_by_id_returns_the_row() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 3).await;
     let (status, body) = json_get(merged_app(repo), "/api/users/2").await;
     assert_eq!(status, StatusCode::OK);
@@ -109,7 +109,7 @@ async fn generated_get_by_id_returns_the_row() {
 
 #[tokio::test]
 async fn generated_get_by_id_returns_404_when_missing() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 3).await;
     let (status, body) = json_get(merged_app(repo), "/api/users/999").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -128,7 +128,7 @@ async fn generated_get_by_id_returns_404_when_missing() {
 
 #[tokio::test]
 async fn generated_get_by_id_returns_400_when_id_not_positive_int() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     for path in ["/api/users/0", "/api/users/-1", "/api/users/abc"] {
         let (status, body) = json_get(merged_app(repo.clone()), path).await;
         assert_eq!(
@@ -145,7 +145,7 @@ async fn generated_get_by_id_returns_400_when_id_not_positive_int() {
 
 #[tokio::test]
 async fn custom_routes_still_respond_when_merged_with_generated() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     let (status, body) = json_get(merged_app(repo), "/api/custom-thing").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, json!({ "custom": "yes" }));
@@ -153,7 +153,7 @@ async fn custom_routes_still_respond_when_merged_with_generated() {
 
 #[tokio::test]
 async fn generated_and_custom_coexist_under_the_same_server() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 2).await;
     let app = merged_app(repo);
 
@@ -171,7 +171,7 @@ async fn generated_and_custom_coexist_under_the_same_server() {
 }
 
 fn enriched_app(
-    repo: Arc<InMemoryCrudRepository>,
+    repo: Arc<InMemoryDynamicService>,
     enrich_items: Option<deterministic::routes::EnrichItemsFn>,
     enrich_item: Option<deterministic::routes::EnrichItemFn>,
 ) -> Router {
@@ -217,7 +217,7 @@ fn tag_item_source() -> deterministic::routes::EnrichItemFn {
 
 #[tokio::test(flavor = "current_thread")]
 async fn enrich_items_transforms_every_row_on_list() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 3).await;
     let app = enriched_app(repo, Some(tag_items_source()), None);
     let (status, body) = json_get(app, "/api/users").await;
@@ -231,7 +231,7 @@ async fn enrich_items_transforms_every_row_on_list() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn enrich_items_can_change_row_count() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 5).await;
     let hook: deterministic::routes::EnrichItemsFn = Arc::new(|rows: Vec<RowMap>| {
         Box::pin(async move { Ok(rows.into_iter().take(2).collect()) })
@@ -244,7 +244,7 @@ async fn enrich_items_can_change_row_count() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn enrich_item_transforms_row_on_get_by_id() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 1).await;
     let app = enriched_app(repo, None, Some(tag_item_source()));
     let (status, body) = json_get(app, "/api/users/1").await;
@@ -254,7 +254,7 @@ async fn enrich_item_transforms_row_on_get_by_id() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn enrich_item_does_not_run_when_id_is_not_found() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     let app = enriched_app(repo, None, Some(tag_item_source()));
     let (status, body) = json_get(app, "/api/users/999").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -264,7 +264,7 @@ async fn enrich_item_does_not_run_when_id_is_not_found() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn enrich_items_error_returns_500_with_errors_envelope() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 1).await;
     let failing: deterministic::routes::EnrichItemsFn = Arc::new(|_rows| {
         Box::pin(async move {
@@ -287,7 +287,7 @@ async fn enrich_items_error_returns_500_with_errors_envelope() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn enrich_item_error_returns_500_with_errors_envelope() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 1).await;
     let failing: deterministic::routes::EnrichItemFn = Arc::new(|_row| {
         Box::pin(async move {
@@ -309,7 +309,7 @@ async fn enrich_item_error_returns_500_with_errors_envelope() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn enrich_items_and_enrich_item_are_independent_when_both_set() {
-    let repo = Arc::new(InMemoryCrudRepository::new());
+    let repo = Arc::new(InMemoryDynamicService::new());
     seed(&repo, 1).await;
     let app = enriched_app(repo, Some(tag_items_source()), Some(tag_item_source()));
     let (list_status, list_body) = json_get(app.clone(), "/api/users").await;

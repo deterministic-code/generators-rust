@@ -1,34 +1,17 @@
 # deterministic (Rust)
 
-Rust port of the `repositories` layer from the
-[deterministic](../README.md) project.
+Rust HTTP runtime for generated apps: routes, middleware, YAML loaders,
+and SQL identifier helpers.
 
-This crate mirrors the canonical TypeScript surface in
-[`typescript/src/repositories/`](../typescript/src/repositories) with
-idiomatic Rust naming:
-
-- Interfaces are traits without the `I` prefix
-  (`Repository`, `CrudRepository`, `StandardCrudRepository`,
-  `Datasource`, `Setup`).
-- Methods use `snake_case`: `query`, `find`, `find_all`, `find_by`,
-  `add`, `update`, `delete`.
-- Errors flow through a single `RepositoryError` enum.
-- Async traits use the `async-trait` crate.
-
-Backends:
-
-- `inmemory` — pure in-memory implementations.
-- `sqlite`, `postgres`, `mysql` — backed by `sqlx`.
-- `sqlserver` — SQL-string generation only (live driver TBD).
-- `oracle` — stub returning `RepositoryError::Unimplemented`
-  (no production-grade async Oracle driver in the Rust ecosystem).
+Persistence lives in Datasources-generated repositories. This crate no
+longer ships dialect CRUD repositories or field converters.
 
 ## Develop
 
 ```bash
 cd rust
-cargo build --all-features
-cargo test --all-features
+cargo build
+cargo test
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 ```

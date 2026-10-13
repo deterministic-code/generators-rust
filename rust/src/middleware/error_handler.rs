@@ -102,6 +102,7 @@ impl IntoResponse for AppError {
 /// MySQL collapses unique, FK, and not-null all onto `23000`, so it is split on
 /// the message text (there is no code-level distinction). Uses only the generic
 /// `DatabaseError` surface so this shared file compiles for any dialect selection.
+#[allow(dead_code)]
 fn classify_db_error(code: &str, message: &str) -> Option<AppError> {
     if code == "23000" {
         let lower = message.to_ascii_lowercase();
@@ -126,19 +127,6 @@ fn classify_db_error(code: &str, message: &str) -> Option<AppError> {
         return Some(AppError::Validation(message.to_string()));
     }
     None
-}
-
-impl From<sqlx::Error> for AppError {
-    fn from(err: sqlx::Error) -> Self {
-        if let sqlx::Error::Database(db_err) = &err {
-            if let Some(code) = db_err.code() {
-                if let Some(app) = classify_db_error(code.as_ref(), db_err.message()) {
-                    return app;
-                }
-            }
-        }
-        AppError::Internal
-    }
 }
 
 pub struct ErrorHandler;

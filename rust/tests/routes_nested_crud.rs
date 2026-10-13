@@ -11,11 +11,11 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 use deterministic::error::RepositoryError;
-use deterministic::repositories::RowMap;
 use deterministic::routes::{
     create_nested_crud_router, CoerceRowFn, CrudService, EnrichItemFn, EnrichItemsFn, IdType,
     NestedCrudRouterConfig, ResolveItemFn, ValidatorFn,
 };
+use deterministic::types::RowMap;
 
 #[derive(Default)]
 struct MapService {

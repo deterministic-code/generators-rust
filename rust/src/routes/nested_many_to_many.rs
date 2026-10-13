@@ -7,12 +7,12 @@ use axum::routing::{get, MethodRouter};
 use axum::{Json, Router};
 use serde_json::{json, Value};
 
-use crate::repositories::RowMap;
 use crate::routes::crud::{CoerceRowFn, CrudService, ValidatorFn};
 use crate::routes::helpers::{
     internal_error, normalize_base, not_found, parse_id, row_map_to_value, validation_error,
     validation_errors_compound, IdType,
 };
+use crate::types::RowMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LinkVerb {

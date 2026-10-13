@@ -3,11 +3,9 @@ use axum::http::{Request as HttpRequest, StatusCode};
 use tower::ServiceExt;
 
 use deterministic::loaders::{GenericRouteSpec, HttpMethod, ResponseFormat};
-use deterministic::repositories::inmemory::InMemoryCrudRepository;
+use deterministic::services::InMemoryDynamicService;
 use deterministic::services::DynamicService;
-use deterministic::{
-    build_router, GenericCrudService, ServiceRegistryBuilder,
-};
+use deterministic::{build_router, ServiceRegistryBuilder};
 
 {{{setups}}}
 

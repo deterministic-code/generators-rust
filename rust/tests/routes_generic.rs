@@ -9,11 +9,11 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 use deterministic::error::RepositoryError;
-use deterministic::repositories::RowMap;
 use deterministic::routes::{
     create_generic_router, GenericHandlerFn, GenericResponseFormat, GenericRouterConfig,
     GenericRouterMethod, ValidatorFn,
 };
+use deterministic::types::RowMap;
 
 fn echo_body_handler() -> GenericHandlerFn {
     Arc::new(|body: RowMap| {

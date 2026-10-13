@@ -5,9 +5,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 
 use crate::error::RepositoryError;
-use crate::repositories::datasource_middleware::{
-    DataSourceMiddleware, DatabaseBackend, RewrittenQuery,
-};
+use crate::middleware::{DataSourceMiddleware, DatabaseBackend, RewrittenQuery};
 use crate::trace::{format_elapsed_ms, format_trace_line, TracePhase, TraceTier};
 use crate::util::now_iso;
 
