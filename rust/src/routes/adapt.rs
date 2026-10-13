@@ -2,12 +2,12 @@
 //! composed `DynamicService` stack. A generated service facade forwards each typed method here, so the
 //! router's typed calls flow to the runtime's invoke-based decorators (enrichment, eager-write,
 //! eager-read, OCC) without the facade reimplementing any of it. Arg/result shapes mirror
-//! GenericCrudService::invoke's contract.
+//! DynamicService::invoke's contract.
 
 use serde_json::{json, Map, Value};
 
 use crate::error::RepositoryError;
-use crate::repositories::RowMap;
+use crate::types::RowMap;
 use crate::services::{DynamicService, ServiceError, IF_MATCH_ARG};
 
 fn to_repo_error(err: ServiceError) -> RepositoryError {
@@ -124,14 +124,11 @@ pub async fn delete(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repositories::inmemory::InMemoryCrudRepository;
-    use crate::services::GenericCrudService;
+    use crate::services::InMemoryDynamicService;
     use std::sync::Arc;
 
     fn service() -> Arc<dyn DynamicService> {
-        Arc::new(GenericCrudService::new(Arc::new(
-            InMemoryCrudRepository::new(),
-        )))
+        Arc::new(InMemoryDynamicService::new())
     }
 
     #[tokio::test]

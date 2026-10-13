@@ -10,7 +10,7 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 
 use crate::error::RepositoryError;
-use crate::repositories::RowMap;
+use crate::types::RowMap;
 use crate::routes::crud::ValidatorFn;
 use crate::routes::helpers::{internal_error, validation_errors_compound};
 

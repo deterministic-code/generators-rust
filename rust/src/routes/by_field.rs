@@ -9,7 +9,7 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 
 use crate::error::RepositoryError;
-use crate::repositories::{CrudRepository, RowMap};
+use crate::types::RowMap;
 use crate::routes::crud::{CoerceRowFn, ValidatorFn};
 use crate::routes::helpers::{
     internal_error, normalize_base, row_map_to_value, validation_errors_compound,
@@ -36,16 +36,6 @@ pub trait ByFieldService: Send + Sync + 'static {
         Err(RepositoryError::UnsupportedQuery(
             "delete_by is not implemented for this ByFieldService".to_string(),
         ))
-    }
-}
-
-#[async_trait]
-impl<R> ByFieldService for R
-where
-    R: CrudRepository + 'static,
-{
-    async fn find_by(&self, field: &str, value: &Value) -> Result<Vec<RowMap>, RepositoryError> {
-        CrudRepository::find_by(self, field, value).await
     }
 }
 

@@ -1,6 +1,4 @@
 pub mod datasource_types;
-pub mod eager_write;
-pub mod enrichments;
 pub mod routes;
 pub mod services;
 pub mod settings;
@@ -10,10 +8,6 @@ pub use datasource_types::{
     load_datasource_types, parse_datasource_types, DatasourceMapping, DatasourceTypeDef,
     DatasourceTypesDoc, DatasourceTypesError, FieldDef, FieldMapping, FieldSize, SeedRow,
 };
-pub use eager_write::{
-    build_eager_read_bindings, build_eager_write_bindings, BindingKind, EagerWriteChildBinding,
-};
-pub use enrichments::{build_entities_by_name, compute_enrichments_for_entity, EnrichmentSpec};
 pub use routes::{
     load_routes, parse_routes, CustomRouteSpec, GenericRouteSpec, HttpMethod, RawCombinedChild,
     RawCombinedEntry, ResponseFormat, RoutesDoc, RoutesError,

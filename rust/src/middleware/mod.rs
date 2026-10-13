@@ -3,6 +3,7 @@ pub mod authenticate_signin;
 pub mod authorize;
 pub mod cors_middleware;
 pub mod data_source_console_logger_middleware;
+pub mod datasource_middleware;
 pub mod error_handler;
 pub mod error_handler_middleware;
 pub mod form_body_middleware;
@@ -22,6 +23,7 @@ pub use authenticate_signin::{authenticate_signin_layer, AuthenticateSignin, Sig
 pub use authorize::{authorize_layer, derive_permission, Authorize};
 pub use cors_middleware::CorsMiddleware;
 pub use data_source_console_logger_middleware::DataSourceConsoleLoggerMiddleware;
+pub use datasource_middleware::{DataSourceMiddleware, DatabaseBackend, RewrittenQuery};
 pub use error_handler::{ApiErrorEntry, AppError, ErrorHandler};
 pub use error_handler_middleware::{
     envelope_error_layer, EnvelopePanicResponder, ErrorHandlerMiddleware,

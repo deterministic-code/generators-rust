@@ -1,5 +1,6 @@
 node_modules
 dist
+.worktrees/
 rust/target
 *.log
 .DS_Store

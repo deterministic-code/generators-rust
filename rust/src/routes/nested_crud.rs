@@ -7,7 +7,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde_json::{json, Value};
 
-use crate::repositories::RowMap;
+use crate::types::RowMap;
 use crate::routes::crud::{
     CoerceRowFn, CrudService, EnrichItemFn, EnrichItemsFn, ResolveItemFn, ValidatorFn,
 };

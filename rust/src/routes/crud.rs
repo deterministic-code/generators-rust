@@ -11,7 +11,7 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 
 use crate::error::RepositoryError;
-use crate::repositories::{CrudRepository, RowMap};
+use crate::types::RowMap;
 use crate::routes::helpers::{
     internal_error, normalize_base, not_found, parse_id, precondition_required,
     repository_error_to_response, row_map_to_value, run_enrich_item_hook, run_enrich_items_hook,
@@ -65,37 +65,6 @@ pub trait CrudService: Send + Sync + 'static {
         id: &Value,
         expected_updated: Option<&str>,
     ) -> Result<bool, RepositoryError>;
-}
-
-#[async_trait]
-impl<R> CrudService for R
-where
-    R: CrudRepository + 'static,
-{
-    async fn find_all(&self) -> Result<Vec<RowMap>, RepositoryError> {
-        CrudRepository::find_all(self).await
-    }
-    async fn find(&self, id: &Value) -> Result<Option<RowMap>, RepositoryError> {
-        CrudRepository::find(self, id).await
-    }
-    async fn add(&self, body: RowMap) -> Result<RowMap, RepositoryError> {
-        CrudRepository::add(self, body).await
-    }
-    async fn update(
-        &self,
-        id: &Value,
-        body: RowMap,
-        expected_updated: Option<&str>,
-    ) -> Result<Option<RowMap>, RepositoryError> {
-        CrudRepository::update_with_expected(self, id, body, expected_updated).await
-    }
-    async fn delete(
-        &self,
-        id: &Value,
-        expected_updated: Option<&str>,
-    ) -> Result<bool, RepositoryError> {
-        CrudRepository::delete_with_expected(self, id, expected_updated).await
-    }
 }
 
 pub struct CrudRouterConfig {

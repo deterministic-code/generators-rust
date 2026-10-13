@@ -26,9 +26,6 @@ pub enum RepositoryError {
     #[error("transactions not supported: {0}")]
     TransactionsNotSupported(String),
 
-    #[error("sqlx error: {0}")]
-    Sqlx(#[from] sqlx::Error),
-
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 

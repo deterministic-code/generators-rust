@@ -1,7 +1,6 @@
 pub mod combined_routes;
 pub mod compose;
 pub mod config;
-pub mod converter_defaults;
 pub mod crud_routes;
 pub mod datasource;
 pub mod server;

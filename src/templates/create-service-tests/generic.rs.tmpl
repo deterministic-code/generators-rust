@@ -1,17 +1,15 @@
 #[cfg(test)]
 mod tests {
     use super::{{fileBase}}::*;
-    use deterministic::repositories::inmemory::InMemoryCrudRepository;
-    use deterministic::repositories::RowMap;
+    use deterministic::services::InMemoryDynamicService;
+    use deterministic::types::RowMap;
     use deterministic::routes::{ByFieldService, CrudService, ReadOnlyService};
-    use deterministic::services::{DynamicService, GenericCrudService};
+    use deterministic::services::DynamicService;
     use serde_json::json;
     use std::sync::Arc;
 
     fn service() -> {{structName}} {
-        {{structName}}::from_inner(Arc::new(GenericCrudService::new(Arc::new(
-            InMemoryCrudRepository::new(),
-        ))))
+        {{structName}}::from_inner(Arc::new(InMemoryDynamicService::new()))
     }
 
     fn row(name: &str) -> RowMap {

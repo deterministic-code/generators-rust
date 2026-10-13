@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 use deterministic::error::RepositoryError;
-use deterministic::repositories::RowMap;
+use deterministic::types::RowMap;
 use deterministic::routes::{
     create_nested_many_to_many_router, CrudService, IdType, LinkVerb, NestedManyToManyRouterConfig,
     ValidatorFn,

@@ -8,10 +8,9 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 use deterministic::loaders::{GenericRouteSpec, HttpMethod};
-use deterministic::repositories::inmemory::InMemoryCrudRepository;
 use deterministic::services::DynamicService;
 use deterministic::{
-    build_router, GenericCrudService, ServiceError, ServiceRegistry, ServiceRegistryBuilder,
+    build_router, InMemoryDynamicService, ServiceError, ServiceRegistry, ServiceRegistryBuilder,
 };
 
 #[derive(Default, Clone)]
@@ -221,9 +220,7 @@ async fn unregistered_service_skips_route_with_report() {
 
 #[tokio::test]
 async fn generic_crud_service_via_router_round_trip() {
-    let svc: Arc<dyn DynamicService> = Arc::new(GenericCrudService::new(Arc::new(
-        InMemoryCrudRepository::new(),
-    )));
+    let svc: Arc<dyn DynamicService> = Arc::new(InMemoryDynamicService::new());
     let registry = build_registry("widget", svc);
     let create = GenericRouteSpec {
         route_name: "create_widget".to_string(),

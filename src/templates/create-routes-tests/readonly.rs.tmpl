@@ -4,13 +4,12 @@ mod tests {
     {{{serviceImport}}}
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
-    use deterministic::repositories::inmemory::InMemoryCrudRepository;
-    use deterministic::services::GenericCrudService;
-    use std::sync::Arc;
+    use deterministic::services::InMemoryDynamicService;
+        use std::sync::Arc;
     use tower::ServiceExt;
 
     fn setup() -> axum::Router {
-        let inner = GenericCrudService::new(Arc::new(InMemoryCrudRepository::new()));
+        let inner = InMemoryDynamicService::new();
         router(Arc::new({{className}}::from_inner(Arc::new(inner))))
     }
 

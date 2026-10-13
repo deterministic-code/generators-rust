@@ -3,9 +3,7 @@ pub mod backend_app_config;
 pub mod error;
 pub mod id_type;
 pub mod loaders;
-pub mod mappings;
 pub mod middleware;
-pub mod repositories;
 pub mod router;
 pub mod routes;
 pub mod run;
@@ -22,26 +20,18 @@ pub use backend_app_config::{
 };
 pub use error::RepositoryError;
 pub use id_type::IdType;
-pub use mappings::{
-    get_entity_field_map, parse_field_mappings, EntityFieldMap, FieldMappingTranslator,
-    FieldMappings, TypeFieldConverter,
-};
 pub use middleware::{
-    trace_route_layer, DataSourceConsoleLoggerMiddleware, ServiceConsoleLoggerMiddleware,
-    TraceRouteMiddleware,
+    trace_route_layer, DataSourceConsoleLoggerMiddleware, DataSourceMiddleware, DatabaseBackend,
+    RewrittenQuery, ServiceConsoleLoggerMiddleware, TraceRouteMiddleware,
 };
 pub use services::{
     AuthError, AuthenticationService, AuthorizationService, CanAccessPermissionResult,
-    CustomServices, DynamicService, GenericCrudService, ServiceError, UserInfoResult,
+    CustomServices, DynamicService, InMemoryDynamicService, ServiceError, UserInfoResult,
+    IF_MATCH_ARG,
 };
 pub use sql_identifier::{quote_identifier, validate_identifier};
 pub use trace::{format_elapsed_ms, format_trace_line, TracePhase, TraceTier};
-pub use types::StandardTable;
-
-pub use repositories::{
-    run_query_with_middlewares, CrudRepository, DataSourceMiddleware, DatabaseBackend, Datasource,
-    Repository, RewrittenQuery, RowMap, Setup, StandardCrudRepository,
-};
+pub use types::{RowMap, StandardTable};
 
 pub use router::{build_router, RouterBuildReport, ServiceRegistry, ServiceRegistryBuilder};
 

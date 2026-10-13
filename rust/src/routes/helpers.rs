@@ -6,7 +6,7 @@ use axum::Json;
 use serde_json::{json, Value};
 
 use crate::error::RepositoryError;
-use crate::repositories::RowMap;
+use crate::types::RowMap;
 use crate::routes::crud::{EnrichItemFn, EnrichItemsFn, ResolveItemFn, RouteHookError};
 
 pub(crate) use crate::id_type::parse_id;
