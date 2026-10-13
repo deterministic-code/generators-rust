@@ -7,7 +7,6 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde_json::{json, Value};
 
-use crate::types::RowMap;
 use crate::routes::crud::{
     CoerceRowFn, CrudService, EnrichItemFn, EnrichItemsFn, ResolveItemFn, ValidatorFn,
 };
@@ -16,6 +15,7 @@ use crate::routes::helpers::{
     run_enrich_item_hook, run_enrich_items_hook, run_resolve_item_hook, validation_error,
     validation_errors_compound, IdType,
 };
+use crate::types::RowMap;
 
 pub struct NestedCrudRouterConfig {
     pub service: Arc<dyn CrudService>,

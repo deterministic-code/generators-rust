@@ -9,12 +9,12 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 
 use crate::error::RepositoryError;
-use crate::types::RowMap;
 use crate::routes::crud::{EnrichItemFn, EnrichItemsFn};
 use crate::routes::helpers::{
     internal_error, normalize_base, not_found, parse_id, row_map_to_value, run_enrich_item_hook,
     run_enrich_items_hook, validation_error, IdType,
 };
+use crate::types::RowMap;
 
 #[async_trait]
 pub trait ReadOnlyService: Send + Sync + 'static {

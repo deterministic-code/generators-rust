@@ -135,8 +135,12 @@ pub async fn build_app_with_trace_writers(
 
     let datasource = Arc::new(open_datasource(&config.database_url).await?);
 
-    let (registry, raw_registry) =
-        build_service_registry(&entities, &services_specs, &config.custom_services, &service_chain)?;
+    let (registry, raw_registry) = build_service_registry(
+        &entities,
+        &services_specs,
+        &config.custom_services,
+        &service_chain,
+    )?;
 
     let composed_entity_router = match config.route_composer.as_ref() {
         Some(composer) => {

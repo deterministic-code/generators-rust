@@ -11,12 +11,12 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 
 use crate::error::RepositoryError;
-use crate::types::RowMap;
 use crate::routes::helpers::{
     internal_error, normalize_base, not_found, parse_id, precondition_required,
     repository_error_to_response, row_map_to_value, run_enrich_item_hook, run_enrich_items_hook,
     run_resolve_item_hook, validation_error, validation_errors_compound, IdType,
 };
+use crate::types::RowMap;
 
 pub type ValidatorFn = Arc<dyn Fn(&RowMap) -> Result<(), Vec<String>> + Send + Sync + 'static>;
 pub type CoerceRowFn = Arc<dyn Fn(&mut RowMap) + Send + Sync + 'static>;

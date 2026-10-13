@@ -9,11 +9,11 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 
 use crate::error::RepositoryError;
-use crate::types::RowMap;
 use crate::routes::crud::{CoerceRowFn, ValidatorFn};
 use crate::routes::helpers::{
     internal_error, normalize_base, row_map_to_value, validation_errors_compound,
 };
+use crate::types::RowMap;
 
 #[async_trait]
 pub trait ByFieldService: Send + Sync + 'static {

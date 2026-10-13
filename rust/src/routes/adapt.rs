@@ -7,8 +7,8 @@
 use serde_json::{json, Map, Value};
 
 use crate::error::RepositoryError;
-use crate::types::RowMap;
 use crate::services::{DynamicService, ServiceError, IF_MATCH_ARG};
+use crate::types::RowMap;
 
 fn to_repo_error(err: ServiceError) -> RepositoryError {
     match err {

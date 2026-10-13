@@ -10,9 +10,9 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 
 use crate::error::RepositoryError;
-use crate::types::RowMap;
 use crate::routes::crud::ValidatorFn;
 use crate::routes::helpers::{internal_error, validation_errors_compound};
+use crate::types::RowMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GenericRouterMethod {
