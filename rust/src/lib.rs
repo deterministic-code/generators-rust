@@ -31,7 +31,7 @@ pub use services::{
 };
 pub use sql_identifier::{quote_identifier, validate_identifier};
 pub use trace::{format_elapsed_ms, format_trace_line, TracePhase, TraceTier};
-pub use types::{RowMap, StandardTable};
+pub use types::RowMap;
 
 pub use router::{build_router, RouterBuildReport, ServiceRegistry, ServiceRegistryBuilder};
 
