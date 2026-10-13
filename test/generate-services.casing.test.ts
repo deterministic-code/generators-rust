@@ -53,7 +53,7 @@ describe("generate services casing", () => {
     const files = await byFilename({});
     assert.ok(files.has("notificationTypeService.rs"));
     const body = files.get("notificationTypeService.rs")!;
-    assert.match(body, /pub struct NotificationTypeService /);
+    assert.match(body, /pub struct NotificationTypeService;/);
   });
 
   it("Pascal file names", async () => {

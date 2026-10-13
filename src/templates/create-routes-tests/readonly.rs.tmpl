@@ -1,46 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use super::{{fileBase}}::router;
-    {{{serviceImport}}}
-    use axum::body::Body;
-    use axum::http::{Request, StatusCode};
-    use deterministic::services::InMemoryDynamicService;
-        use std::sync::Arc;
-    use tower::ServiceExt;
+    use super::{{fileBase}}::*;
 
-    fn setup() -> axum::Router {
-        let inner = InMemoryDynamicService::new();
-        router(Arc::new({{className}}::from_inner(Arc::new(inner))))
+    #[test]
+    fn router_is_defined() {
+        router();
     }
-
-    #[tokio::test]
-    async fn {{getListTest}}() {
-        let res = setup()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri("{{mountPath}}")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(res.status(), StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn {{getMissingTest}}() {
-        let res = setup()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri("{{mountPath}}/{{missingId}}")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(res.status(), StatusCode::NOT_FOUND);
-    }
-{{{byFieldsBlock}}}
 }

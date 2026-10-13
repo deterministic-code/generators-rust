@@ -68,13 +68,9 @@ describe("generate-service-tests", () => {
 
     const user = textOf(entries, "userServiceTests.rs");
     assert.match(user, /use super::userService::\*;/);
-    assert.match(user, /fn service\(\) -> UserService/);
-    assert.match(user, /UserService::from_inner/);
-    assert.match(user, /InMemoryDynamicService::new/);
-    assert.match(user, /json!\(99999\)/);
-    assert.match(user, /fn find_all_returns_empty_on_a_fresh_service/);
-    assert.match(user, /fn add_then_find_round_trips/);
-    assert.match(user, /fn invoke_find_all_delegates_to_the_inner_service/);
+    assert.match(user, /UserService::new/);
+    assert.doesNotMatch(user, /InMemoryCrudRepository/);
+    assert.doesNotMatch(user, /deterministic::/);
   });
 
   it("emits nothing without a types include", async () => {

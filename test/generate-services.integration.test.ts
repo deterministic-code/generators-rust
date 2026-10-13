@@ -88,23 +88,19 @@ describe("generate-services", () => {
     assert.ok(healthPath, `health stub missing; got: ${paths.join(", ")}`);
 
     const user = textOf(entries, "userService.rs");
-    assert.match(user, /pub struct UserService/);
-    assert.match(user, /inner: Arc<dyn DynamicService>/);
-    assert.match(user, /pub fn from_inner\(inner: Arc<dyn DynamicService>\)/);
-    assert.match(user, /ctx\.entity_service\("user"\)/);
-    assert.match(user, /impl DynamicService for UserService/);
-    assert.match(user, /impl deterministic::routes::CrudService for UserService/);
+    assert.match(user, /pub struct UserService;/);
+    assert.match(user, /pub fn new\(\) -> Self/);
+    assert.doesNotMatch(user, /deterministic::/);
+    assert.doesNotMatch(user, /DynamicService/);
 
     const report = textOf(entries, "../custom/reportService.rs");
-    assert.match(report, /pub struct ReportService/);
-    assert.match(report, /async fn run\(&self, _args: Value\)/);
-    assert.match(report, /Ok\(serde_json::json!\(\{\}\)\)/);
-    assert.match(report, /"run" => self\.run\(args\)\.await/);
+    assert.match(report, /pub struct ReportService;/);
+    assert.match(report, /pub fn new\(\) -> Self/);
+    assert.doesNotMatch(report, /DynamicService/);
 
     const health = textOf(entries, healthPath);
-    assert.match(health, /use serde_json::\{json, Value\};/);
-    assert.match(health, /async fn check\(&self, _args: Value\)/);
-    assert.match(health, /Ok\(json!\(\{ "status": "ok" \}\)\)/);
+    assert.match(health, /pub fn new\(\) -> Self/);
+    assert.doesNotMatch(health, /deterministic::/);
   });
 
   it("rejects when services.yaml is missing", async () => {
