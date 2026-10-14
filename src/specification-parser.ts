@@ -1,4 +1,4 @@
-export { DeterministicParser } from "@deterministic-code/deterministic-specifications-typescript/parser";
+export { DeterministicParser } from "@deterministic-code/deterministic-generators-common/parser";
 export type {
   CustomRouteEntry,
   CustomServiceEntry,
@@ -21,7 +21,7 @@ export type {
   Type,
   TypeField,
   TypeKind,
-} from "@deterministic-code/deterministic-specifications-typescript/parser";
+} from "@deterministic-code/deterministic-generators-common/parser";
 export type { IDeterministicReader } from "@deterministic-code/generators-common/deterministic-reader";
 export {
   DATASOURCE_SEEDS_YAML,
