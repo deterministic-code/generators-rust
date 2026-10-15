@@ -1,4 +1,4 @@
-import { convertSpecType } from "../base-type-converter.ts";
+import { convertSpecType } from "../deterministic-type-converter.ts";
 
 export const rustString = (value: string): string =>
   `String::from(${JSON.stringify(value)})`;

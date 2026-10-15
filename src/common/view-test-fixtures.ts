@@ -9,7 +9,7 @@ import {
   wrapsInheritedDatasource,
 } from "./view-shape.ts";
 import { sampleForField, samplesForNative } from "./test-samples.ts";
-import { convertSpecType } from "../base-type-converter.ts";
+import { convertSpecType } from "../deterministic-type-converter.ts";
 import type { PackCasing } from "./default-casing.ts";
 import type { RustImportGenerator } from "../import-generator.ts";
 import type { Type, TypeField } from "../specification-parser.ts";
