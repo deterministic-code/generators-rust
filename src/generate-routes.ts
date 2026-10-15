@@ -7,7 +7,7 @@ import {
   isReadonlyLookup,
   tableByName,
 } from "@deterministic-code/generators-common/spec-types";
-import { convertSpecType } from "./base-type-converter.ts";
+import { convertSpecType } from "./deterministic-type-converter.ts";
 import { isDictionaryCandidate } from "./common/dictionary-candidate.ts";
 import {
   DeterministicParser,
