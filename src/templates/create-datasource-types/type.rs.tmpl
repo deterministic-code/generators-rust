@@ -9,3 +9,14 @@ pub struct {{structName}} {
     pub {{ident}}: {{rustType}},
 {{/fields}}
 }
+{{#implDefault}}
+impl Default for {{structName}} {
+    fn default() -> Self {
+        Self {
+{{#fields}}
+            {{ident}}: {{&defaultExpr}},
+{{/fields}}
+        }
+    }
+}
+{{/implDefault}}

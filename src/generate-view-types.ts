@@ -6,6 +6,7 @@ import {
   datasourceTypesOf,
   dictionaryEntryFields,
   dictionaryOfField,
+  fieldTypeOf,
   tableKind,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
@@ -23,9 +24,14 @@ import {
   type Type,
   type TypeField,
 } from "./specification-parser.ts";
-import { convertSpecType } from "./deterministic-type-converter.ts";
+import {
+  convertSpecType,
+  rustLanguageZero,
+  rustSpecDefaultExpr,
+} from "./deterministic-type-converter.ts";
 import { typeTmpl } from "./resources/view-types.ts";
 import { Emit } from "./emit.ts";
+import { typesNeedingDefault } from "./struct-default.ts";
 
 class Generator extends Emit {
   private readonly typesByName: Map<string, Type>;
@@ -46,8 +52,9 @@ class Generator extends Emit {
   }
 
   from(deterministic: IDeterministic): GenerateEntry[] {
+    const needingDefault = typesNeedingDefault(deterministic);
     return authoredViewTypesOf(deterministic).map((view) =>
-      this.view(view, this.expandedByName.get(view.name)),
+      this.view(view, this.expandedByName.get(view.name), needingDefault),
     );
   }
 
@@ -73,19 +80,31 @@ class Generator extends Emit {
     return field.isNullable ? `Option<${base}>` : base;
   }
 
+  private fieldToken(field: TypeField) {
+    const rustType = this.rustTypeFor(field);
+    const specExpr =
+      field.kind === "primitive"
+        ? rustSpecDefaultExpr(fieldTypeOf(field, this.typesByName), field)
+        : undefined;
+    return {
+      ident: this.casing.convertFields(field.name),
+      rustType,
+      defaultExpr: specExpr ?? rustLanguageZero(rustType),
+    };
+  }
+
   private structFields(view: Type, expanded: Type | undefined) {
     const fields = emitViewFields(view, expanded, this.datasourceNames).map(
-      (f) => ({
-        ident: this.casing.convertFields(f.name),
-        rustType: this.rustTypeFor(f),
-      }),
+      (f) => this.fieldToken(f),
     );
+    const synthetic = (ident: string, rustType: string) => ({
+      ident,
+      rustType,
+      defaultExpr: rustLanguageZero(rustType),
+    });
     if (isAlias(view) && fields.length > 0) {
       return [
-        {
-          ident: "base",
-          rustType: this.imports.datasourceQual(view.name),
-        },
+        synthetic("base", this.imports.datasourceQual(view.name)),
         ...fields,
       ];
     }
@@ -94,17 +113,18 @@ class Generator extends Emit {
       wrapsInheritedDatasource(view, this.datasourceNames)
     ) {
       return [
-        {
-          ident: "base",
-          rustType: this.imports.datasourceQual(view.inherits),
-        },
+        synthetic("base", this.imports.datasourceQual(view.inherits)),
         ...fields,
       ];
     }
     return fields;
   }
 
-  private view(view: Type, expanded: Type | undefined): GenerateEntry {
+  private view(
+    view: Type,
+    expanded: Type | undefined,
+    needingDefault: Set<string>,
+  ): GenerateEntry {
     const structName = this.casing.convertTypes(view.name);
     const isUnion = isUnionEnum(view);
     const members = (view.union ?? []).map((name) => ({
@@ -128,6 +148,7 @@ class Generator extends Emit {
         aliasType: isAlias(view) ? this.imports.datasourceQual(view.name) : "",
         isUnion,
         isStruct,
+        implDefault: isStruct && needingDefault.has(view.name),
         needsHashMap: fields.some((f) => f.rustType.includes("HashMap<")),
         members,
         fields,
