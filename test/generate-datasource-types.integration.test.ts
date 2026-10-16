@@ -115,4 +115,68 @@ describe("generate", () => {
     assert.match(child, /pub owner_id: i32,/);
     assert.doesNotMatch(child, /pub owner_id: String/);
   });
+
+  it("emits Default for non-zero spec defaults and skips language zeros", async () => {
+    const byName = indexEntries(
+      await generate({
+        reader: memoryReader({
+          [TYPES_YAML]: `types:
+  - flags:
+      tags: [datasource_type]
+      inherits: set
+      fields:
+        - is_enabled:
+            type: boolean
+            default_value: true
+        - is_disabled:
+            type: boolean
+            default_value: false
+        - count:
+            type: integer
+            default_value: 0
+        - rank:
+            type: integer
+            default_value: 1
+        - empty_name:
+            type: string
+            default_value: ""
+        - title:
+            type: string
+            default_value: hello
+        - blob:
+            type: binary
+            default_value: Hex('00')
+        - stamped:
+            type: datetime
+            default_value: UtcNow
+        - opted_out:
+            type: boolean
+            is_nullable: true
+            default_value: false
+        - token:
+            type: uuid
+            default_value: NewId
+        - price:
+            type: decimal
+            default_value: "1.50"
+`,
+        }),
+        settings: {},
+      }),
+    );
+    const flags = entryBody(requireEntry(byName, "flags.rs"));
+    assert.match(flags, /impl Default for Flags/);
+    assert.match(flags, /is_enabled: true,/);
+    assert.match(flags, /is_disabled: false,/);
+    assert.match(flags, /count: 0,/);
+    assert.match(flags, /rank: 1,/);
+    assert.match(flags, /empty_name: String::new\(\),/);
+    assert.doesNotMatch(flags, /String::from\(""\)/);
+    assert.match(flags, /title: String::from\("hello"\),/);
+    assert.match(flags, /blob: vec!\[0\],/);
+    assert.match(flags, /stamped: chrono::Utc::now\(\),/);
+    assert.match(flags, /opted_out: Some\(false\),/);
+    assert.match(flags, /token: uuid::Uuid::new_v4\(\)\.to_string\(\),/);
+    assert.match(flags, /price: String::from\("1.50"\),/);
+  });
 });

@@ -59,7 +59,10 @@ export const defaultValueConverter = new DeterministicDefaultValueConverter({
   biginteger: numeric("biginteger"),
   unsignedbiginteger: numeric("unsignedbiginteger"),
   float: numeric("float"),
-  decimal: numeric("decimal"),
+  decimal: {
+    Numeric: token(spec.decimal.Numeric!, rustString, /^String::from\("(.*)"\)$/),
+    String: quoted,
+  },
   boolean: {
     Boolean: token(
       spec.boolean.Boolean!,
@@ -95,13 +98,13 @@ export const defaultValueConverter = new DeterministicDefaultValueConverter({
   uuid: {
     NewId: token(
       spec.uuid.NewId!,
-      () => "uuid::Uuid::new_v4()",
-      /^uuid::Uuid::new_v4\(\)$/,
+      () => "uuid::Uuid::new_v4().to_string()",
+      /^uuid::Uuid::new_v4\(\)\.to_string\(\)$/,
     ),
     Empty: token(
       spec.uuid.Empty!,
-      () => "uuid::Uuid::nil()",
-      /^uuid::Uuid::nil\(\)$/,
+      () => "uuid::Uuid::nil().to_string()",
+      /^uuid::Uuid::nil\(\)\.to_string\(\)$/,
     ),
     Uuid: token(spec.uuid.Uuid!, rustString, /^String::from\("(.*)"\)$/),
   },
@@ -112,3 +115,54 @@ export const toNative = (specType: string): string =>
   typeConverter.convert(specType);
 
 export const convertSpecType = toNative;
+
+const isRustZeroExpr = (expr: string): boolean =>
+  expr === "false" ||
+  expr === "0" ||
+  expr === "0.0" ||
+  expr === "String::new()" ||
+  expr === 'String::from("")' ||
+  expr === "vec![]" ||
+  expr === "None";
+
+/** Spec default expression, or `undefined` when absent or the language zero. */
+export const rustSpecDefaultExpr = (
+  specType: string,
+  field: {
+    hasDefault?: boolean;
+    defaultValue?: string | number | boolean | null;
+    isNullable: boolean;
+  },
+): string | undefined => {
+  if (field.hasDefault !== true) return undefined;
+  const expr = defaultValueConverter.convert(
+    specType,
+    String(field.defaultValue),
+  );
+  if (expr === null) return undefined;
+  if (field.isNullable) return `Some(${expr})`;
+  return isRustZeroExpr(expr) ? undefined : expr;
+};
+
+export const rustLanguageZero = (rustType: string): string => {
+  if (rustType.startsWith("Option<")) return "None";
+  if (rustType.startsWith("Vec<")) return "vec![]";
+  if (rustType.startsWith("HashMap<")) return "HashMap::new()";
+  if (rustType === "bool") return "false";
+  if (rustType === "String") return "String::new()";
+  if (rustType === "chrono::DateTime<chrono::Utc>") {
+    return "chrono::DateTime::<chrono::Utc>::UNIX_EPOCH";
+  }
+  if (rustType === "f64") return "0.0";
+  if (
+    rustType === "i16" ||
+    rustType === "i32" ||
+    rustType === "i64" ||
+    rustType === "u16" ||
+    rustType === "u32" ||
+    rustType === "u64"
+  ) {
+    return "0";
+  }
+  return `${rustType}::default()`;
+};

@@ -14,7 +14,12 @@ import {
   type Type,
   type TypeField,
 } from "./specification-parser.ts";
-import { convertSpecType } from "./deterministic-type-converter.ts";
+import {
+  convertSpecType,
+  rustLanguageZero,
+  rustSpecDefaultExpr,
+} from "./deterministic-type-converter.ts";
+import { typesNeedingDefault } from "./struct-default.ts";
 import { typeTmpl } from "./resources/datasource-types.ts";
 import { Emit } from "./emit.ts";
 
@@ -31,13 +36,27 @@ class Generator extends Emit {
     const typesByName = new Map(
       deterministic.expandedTypes.map((t) => [t.name, t]),
     );
+    const needingDefault = typesNeedingDefault(deterministic);
     return datasourceTypesOf(deterministic).map((table) =>
-      this.type(table, typesByName),
+      this.type(table, typesByName, needingDefault),
     );
   }
 
-  private type(table: Type, typesByName: Map<string, Type>): GenerateEntry {
-    const fields = persistedColumnFields(table, typesByName);
+  private type(
+    table: Type,
+    typesByName: Map<string, Type>,
+    needingDefault: Set<string>,
+  ): GenerateEntry {
+    const implDefault = needingDefault.has(table.name);
+    const fields = persistedColumnFields(table, typesByName).map((f) => {
+      const rustType = rustTypeFor(f, typesByName);
+      const specExpr = rustSpecDefaultExpr(fieldTypeOf(f, typesByName), f);
+      return {
+        ident: this.casing.convertFields(f.name),
+        rustType,
+        defaultExpr: specExpr ?? rustLanguageZero(rustType),
+      };
+    });
     const structName = this.casing.convertTypes(table.name);
     return content(
       this.imports.datasource(table.name),
@@ -48,10 +67,8 @@ class Generator extends Emit {
         structName,
         datasourceType: tableKind(table),
         fieldCount: String(fields.length),
-        fields: fields.map((f) => ({
-          ident: this.casing.convertFields(f.name),
-          rustType: rustTypeFor(f, typesByName),
-        })),
+        implDefault,
+        fields,
       }),
     );
   }

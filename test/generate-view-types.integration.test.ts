@@ -126,4 +126,76 @@ describe("generate view types", () => {
     assert.doesNotMatch(summary, /pub nick_name/);
     assert.doesNotMatch(summary, /pub role_id/);
   });
+
+  it("emits Default for non-zero spec defaults and nested structs", async () => {
+    const map = indexEntries(
+      await generate({
+        reader: memoryReader({
+          [TYPES_YAML]: `types:
+  - flags:
+      tags: [view_type]
+      fields:
+        - is_enabled:
+            type: boolean
+            default_value: true
+        - is_disabled:
+            type: boolean
+            default_value: false
+        - count:
+            type: integer
+            default_value: 0
+        - rank:
+            type: integer
+            default_value: 1
+        - empty_name:
+            type: string
+            default_value: ""
+        - title:
+            type: string
+            default_value: hello
+        - blob:
+            type: binary
+            default_value: Hex('00')
+        - stamped:
+            type: datetime
+            default_value: UtcNow
+        - opted_out:
+            type: boolean
+            is_nullable: true
+            default_value: false
+        - token:
+            type: uuid
+            default_value: NewId
+        - price:
+            type: decimal
+            default_value: "1.50"
+        - home:
+            type: place
+  - place:
+      tags: [view_type]
+      fields:
+        - city:
+            type: string
+`,
+        }),
+        settings: {},
+      }),
+    );
+    const flagsFile = [...map.keys()].find((name) => name.endsWith("flags.rs"));
+    const placeFile = [...map.keys()].find((name) => name.endsWith("place.rs"));
+    assert.ok(flagsFile, "missing flags.rs generate entry");
+    assert.ok(placeFile, "missing place.rs generate entry");
+    const flags = entryBody(requireEntry(map, flagsFile));
+    const place = entryBody(requireEntry(map, placeFile));
+    assert.match(flags, /impl Default for Flags/);
+    assert.match(flags, /is_enabled: true,/);
+    assert.match(flags, /empty_name: String::new\(\),/);
+    assert.doesNotMatch(flags, /String::from\(""\)/);
+    assert.match(flags, /opted_out: Some\(false\),/);
+    assert.match(flags, /token: uuid::Uuid::new_v4\(\)\.to_string\(\),/);
+    assert.match(flags, /price: String::from\("1.50"\),/);
+    assert.match(flags, /home: .*Place::default\(\)/);
+    assert.match(place, /impl Default for Place/);
+    assert.match(place, /city: String::new\(\),/);
+  });
 });
