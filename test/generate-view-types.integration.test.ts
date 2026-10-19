@@ -169,8 +169,70 @@ describe("generate view types", () => {
         - price:
             type: decimal
             default_value: "1.50"
+        - local_now:
+            type: datetime
+            default_value: Now
+        - explicit_at:
+            type: datetime
+            default_value: "DateTime('2026-01-01T00:00:00Z')"
+        - empty_id:
+            type: uuid
+            default_value: Empty
+        - fixed_id:
+            type: uuid
+            default_value: "uuid('11111111-1111-4111-8111-111111111111')"
+        - empty_blob:
+            type: binary
+            default_value: "Hex('')"
+        - initial:
+            type: character
+            default_value: X
+        - ratio:
+            type: float
+            default_value: 1.5
+        - visits:
+            type: unsignedinteger
+            default_value: 1
+        - delta:
+            type: smallinteger
+            default_value: 1
+        - port:
+            type: unsignedsmallinteger
+            default_value: 1
+        - big_rank:
+            type: biginteger
+            default_value: 1
+        - huge:
+            type: unsignedbiginteger
+            default_value: 1
+        - amount:
+            type: number
+            default_value: 1
+        - tags:
+            type: string[]
+            default_value: []
+        - extra:
+            type: string[]
+        - attrs:
+            type: labels{}
+            references: labels.key
+            default_value: {}
+        - aliases:
+            type: string[]
+            is_nullable: true
+            default_value: null
         - home:
             type: place
+  - labels:
+      tags: [view_type]
+      inherits: dictionary
+      fields:
+        - key:
+            type: string
+            size: 64
+        - value:
+            type: string
+            size: 128
   - place:
       tags: [view_type]
       fields:
@@ -194,6 +256,19 @@ describe("generate view types", () => {
     assert.match(flags, /opted_out: Some\(false\),/);
     assert.match(flags, /token: uuid::Uuid::new_v4\(\)\.to_string\(\),/);
     assert.match(flags, /price: String::from\("1.50"\),/);
+    assert.match(flags, /local_now: chrono::Utc::now\(\),/);
+    assert.match(flags, /empty_id: uuid::Uuid::nil\(\)\.to_string\(\),/);
+    assert.match(
+      flags,
+      /fixed_id: String::from\("11111111-1111-4111-8111-111111111111"\),/,
+    );
+    assert.match(flags, /initial: String::from\("X"\),/);
+    assert.match(flags, /ratio: 1.5,/);
+    assert.match(flags, /visits: 1,/);
+    assert.match(flags, /tags: vec!\[\],/);
+    assert.match(flags, /extra: vec!\[\],/);
+    assert.match(flags, /attrs: HashMap::new\(\),/);
+    assert.match(flags, /aliases: None,/);
     assert.match(flags, /home: .*Place::default\(\)/);
     assert.match(place, /impl Default for Place/);
     assert.match(place, /city: String::new\(\),/);
