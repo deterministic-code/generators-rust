@@ -83,9 +83,11 @@ class Generator extends Emit {
   private fieldToken(field: TypeField) {
     const rustType = this.rustTypeFor(field);
     const specExpr =
-      field.kind === "primitive"
-        ? rustSpecDefaultExpr(fieldTypeOf(field, this.typesByName), field)
-        : undefined;
+      field.isArray || field.isMap === true
+        ? undefined
+        : field.kind === "primitive"
+          ? rustSpecDefaultExpr(fieldTypeOf(field, this.typesByName), field)
+          : undefined;
     return {
       ident: this.casing.convertFields(field.name),
       rustType,
