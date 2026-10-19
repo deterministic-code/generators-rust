@@ -130,11 +130,18 @@ export const rustSpecDefaultExpr = (
   specType: string,
   field: {
     hasDefault?: boolean;
-    defaultValue?: string | number | boolean | null;
+    defaultValue?: string | number | boolean | null | readonly [] | object;
     isNullable: boolean;
   },
 ): string | undefined => {
   if (field.hasDefault !== true) return undefined;
+  if (
+    field.defaultValue === null ||
+    Array.isArray(field.defaultValue) ||
+    (typeof field.defaultValue === "object" && field.defaultValue !== null)
+  ) {
+    return undefined;
+  }
   const expr = defaultValueConverter.convert(
     specType,
     String(field.defaultValue),
