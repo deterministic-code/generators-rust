@@ -67,7 +67,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   datasourceRel(entity: string): string {
-    return this.rel("types/generated/datasource", this.datasource(entity));
+    return this.rel(this.layered("types/generated/datasource"), this.datasource(entity));
   }
 
   datasourceQual(entity: string): string {
@@ -88,7 +88,7 @@ export class RustImportGenerator implements IImportGenerator {
 
   datasourceValidatorRel(entity: string): string {
     return this.rel(
-      "types/generated/datasource/validators",
+      this.layered("types/generated/datasource/validators"),
       this.datasourceValidator(entity),
     );
   }
@@ -102,7 +102,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   viewRel(entity: string): string {
-    return this.rel("types/generated/views", this.view(entity));
+    return this.rel(this.layered("types/generated/views"), this.view(entity));
   }
 
   viewQual(entity: string): string {
@@ -119,7 +119,7 @@ export class RustImportGenerator implements IImportGenerator {
 
   viewValidatorRel(entity: string): string {
     return this.rel(
-      "types/generated/views/validators",
+      this.layered("types/generated/views/validators"),
       this.viewValidator(entity),
     );
   }
@@ -133,7 +133,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   serviceRel(entity: string): string {
-    return this.rel("services/generated", this.service(entity));
+    return this.rel(this.layered("services/generated"), this.service(entity));
   }
 
   serviceCustom(name: string, module?: string): string {
@@ -143,8 +143,8 @@ export class RustImportGenerator implements IImportGenerator {
   serviceCustomRel(entity: string): string {
     const file = `${this.serviceStem(entity)}.rs`;
     return this.organizeByFeature
-      ? `features/${this.casing.directory(entity)}/custom/${file}`
-      : `services/custom/${file}`;
+      ? `${this.featuresDir(entity)}/custom/${file}`
+      : `${this.layered("services")}/custom/${file}`;
   }
 
   serviceTest(entity: string): string {
@@ -152,20 +152,20 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   serviceTestRel(entity: string): string {
-    return this.rel("services/generated/__tests__", this.serviceTest(entity));
+    return this.rel(this.layered("services/generated/__tests__"), this.serviceTest(entity));
   }
 
   serviceIntegrationTest(entity: string): string {
     const file = this.rsFile(`${entity}_service_integration_tests`);
     if (this.organizeByFeature) {
-      return `features/${this.casing.directory(entity)}/__tests__/${file}`;
+      return `${this.featuresDir(entity)}/__tests__/${file}`;
     }
     return file;
   }
 
   serviceIntegrationTestRel(entity: string): string {
     return this.rel(
-      "services/generated/__tests__",
+      this.layered("services/generated/__tests__"),
       this.serviceIntegrationTest(entity),
     );
   }
@@ -183,7 +183,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   routeRel(entity: string): string {
-    return this.rel("routes/generated", this.route(entity));
+    return this.rel(this.layered("routes/generated"), this.route(entity));
   }
 
   routeCustom(name: string, module?: string): string {
@@ -224,7 +224,9 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   appWiring(): string {
-    return this.organizeByFeature ? "features/app_wiring.rs" : "app_wiring.rs";
+    return this.organizeByFeature
+      ? `${this.casing.convertDirectories("features")}/app_wiring.rs`
+      : "app_wiring.rs";
   }
 
   validatorFn(
@@ -239,11 +241,12 @@ export class RustImportGenerator implements IImportGenerator {
           : this.viewValidator(entity);
       return `${this.spec("", file)}::${fn}`;
     }
-    const ns =
+    const ns = this.layered(
       kind === "datasource"
-        ? "crate::types::generated::datasource::validators"
-        : "crate::types::generated::views::validators";
-    return `${ns}::${fn}`;
+        ? "types/generated/datasource/validators"
+        : "types/generated/views/validators",
+    ).replaceAll("/", "::");
+    return `crate::${ns}::${fn}`;
   }
 
   apiPath(entity: string): string {
@@ -271,8 +274,23 @@ export class RustImportGenerator implements IImportGenerator {
     return `${this.casing.fileBase(stem)}.rs`;
   }
 
+  private layered(path: string): string {
+    return path
+      .split("/")
+      .map((segment) =>
+        segment === "custom" || segment === "__tests__"
+          ? segment
+          : this.casing.convertDirectories(segment),
+      )
+      .join("/");
+  }
+
+  private featuresDir(entity: string): string {
+    return `${this.casing.convertDirectories("features")}/${this.casing.directory(entity)}`;
+  }
+
   private featurePath(entity: string, file: string): string {
-    return `features/${this.casing.directory(entity)}/${file}`;
+    return `${this.featuresDir(entity)}/${file}`;
   }
 
   private serviceStem(entity: string): string {
@@ -306,7 +324,7 @@ export class RustImportGenerator implements IImportGenerator {
       featureEntityFromClass(name) || "shared"
     ).replace(/-/g, "_");
     const defaultStub = this.organizeByFeature
-      ? `features/${this.casing.directory(entity)}/custom/${file}`
+      ? `${this.featuresDir(entity)}/custom/${file}`
       : `../custom/${file}`;
     if (this.organizeByFeature) {
       if (

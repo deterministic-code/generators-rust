@@ -95,6 +95,17 @@ describe("RustImportGenerator layered (organize_by_feature unset)", () => {
       imports.validatorFn("view", "user", "validate_user"),
       "crate::types::generated::views::validators::validate_user",
     );
+    const pascalDirs = createImportGenerator(".", {
+      "languages.rust.casing.directories": "Pascal",
+    });
+    assert.equal(
+      pascalDirs.datasourceRel("user"),
+      "Types/Generated/Datasource/user.rs",
+    );
+    assert.equal(
+      pascalDirs.validatorFn("datasource", "user", "validate_datasource_user"),
+      "crate::Types::Generated::Datasource::Validators::validate_datasource_user",
+    );
     assert.equal(imports.apiPath("card_payment"), "card-payments");
     assert.equal(imports.apiPath("user"), "users");
     assert.equal(imports.frontend("src/main.rs"), "frontend/src/main.rs");
