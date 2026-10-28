@@ -55,7 +55,6 @@ class Generator extends Emit implements ViewTestOpts {
   readonly views: ViewTestOpts["views"];
   readonly expandedViews: ViewTestOpts["expandedViews"];
   readonly typesByName: ViewTestOpts["typesByName"];
-  readonly datasourceNames: ViewTestOpts["datasourceNames"];
 
   constructor(raw: Record<string, string>, deterministic: IDeterministic) {
     super(raw);
@@ -71,7 +70,6 @@ class Generator extends Emit implements ViewTestOpts {
     this.typesByName = new Map(
       deterministic.expandedTypes.map((t) => [t.name, t]),
     );
-    this.datasourceNames = new Set(this.tables.keys());
   }
 
   from(): GenerateEntry[] {

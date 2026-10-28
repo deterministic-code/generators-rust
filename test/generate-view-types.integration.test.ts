@@ -37,6 +37,12 @@ const TYPES = `types:
       fields:
         - display_name:
             type: string
+  - tagged:
+      tags: [view_type]
+      inherits: tag
+      fields:
+        - extra:
+            type: string
   - payment:
       tags: [view_type]
       union:
@@ -125,6 +131,12 @@ describe("generate view types", () => {
     assert.match(summary, /pub email: String/);
     assert.doesNotMatch(summary, /pub nick_name/);
     assert.doesNotMatch(summary, /pub role_id/);
+    const tagged = await bodyOf("tagged.rs");
+    assert.match(tagged, /pub struct Tagged/);
+    assert.match(tagged, /pub id:/);
+    assert.match(tagged, /pub label:/);
+    assert.match(tagged, /pub extra:/);
+    assert.doesNotMatch(tagged, /pub base:/);
   });
 
   it("emits Default for non-zero spec defaults and nested structs", async () => {

@@ -14,7 +14,6 @@ import {
   emitViewFields,
   isAlias,
   isUnionEnum,
-  wrapsInheritedDatasource,
 } from "./common/view-shape.ts";
 import { rustSpecDefaultExpr } from "./deterministic-type-converter.ts";
 
@@ -43,43 +42,27 @@ export const typesNeedingDefault = (deterministic: IDeterministic): Set<string> 
   const typesByName = new Map(
     deterministic.expandedTypes.map((type) => [type.name, type]),
   );
-  const datasourceNames = new Set(
-    datasourceTypesOf(deterministic).map((type) => type.name),
-  );
   const expandedViews = new Map(
     viewTypesOf(deterministic).map((view) => [view.name, view]),
   );
   const nestedByType = new Map<string, string[]>();
   const seeds: string[] = [];
 
-  const consider = (
-    name: string,
-    fields: readonly TypeField[],
-    extraNested: readonly string[],
-  ): void => {
-    nestedByType.set(name, [...extraNested, ...directNested(fields)]);
+  const consider = (name: string, fields: readonly TypeField[]): void => {
+    nestedByType.set(name, directNested(fields));
     if (hasNonZeroDefault(fields, typesByName)) seeds.push(name);
   };
 
   for (const table of datasourceTypesOf(deterministic)) {
-    consider(table.name, persistedColumnFields(table, typesByName), []);
+    consider(table.name, persistedColumnFields(table, typesByName));
   }
 
   for (const view of authoredViewTypesOf(deterministic)) {
     if (isUnionEnum(view)) continue;
     const expanded = expandedViews.get(view.name);
-    const fields = emitViewFields(view, expanded, datasourceNames);
-    const extraNested: string[] = [];
-    if (isAlias(view) && fields.length > 0) extraNested.push(view.name);
-    else if (
-      view.inherits !== undefined &&
-      wrapsInheritedDatasource(view, datasourceNames)
-    ) {
-      extraNested.push(view.inherits);
-    }
-    const alias = isAlias(view) && fields.length === 0 && extraNested.length === 0;
-    if (alias) continue;
-    consider(view.name, fields, extraNested);
+    const fields = emitViewFields(view, expanded);
+    if (isAlias(view) && fields.length === 0) continue;
+    consider(view.name, fields);
   }
 
   const needing = new Set(seeds);

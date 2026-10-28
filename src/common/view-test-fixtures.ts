@@ -3,11 +3,7 @@ import {
   dictionaryOfField,
   isCollectionField,
 } from "@deterministic-code/generators-common/spec-types";
-import {
-  isAlias,
-  isUnionEnum,
-  wrapsInheritedDatasource,
-} from "./view-shape.ts";
+import { isAlias, isUnionEnum } from "./view-shape.ts";
 import { sampleForField, samplesForNative } from "./test-samples.ts";
 import { convertSpecType } from "../deterministic-type-converter.ts";
 import type { PackCasing } from "./default-casing.ts";
@@ -22,7 +18,6 @@ export type ViewTestOpts = {
   views: Map<string, Type>;
   expandedViews: Map<string, Type>;
   typesByName: Map<string, Type>;
-  datasourceNames: Set<string>;
 };
 
 export type FieldTok = {
@@ -93,20 +88,6 @@ const viewFieldTok = (
   };
 };
 
-const baseTok = (
-  ident: string,
-  expr: string,
-  opts: ViewTestOpts,
-): FieldTok => ({
-  ident,
-  sampleExpr: expr,
-  nextExpr: expr,
-  nullable: false,
-  getsTest: opts.casing.fnIdent(`gets_${ident}`),
-  setsTest: opts.casing.fnIdent(`sets_${ident}`),
-  allowsNoneTest: opts.casing.fnIdent(`allows_setting_${ident}_to_none`),
-});
-
 export const shapedToks = (
   view: Type,
   opts: ViewTestOpts,
@@ -120,16 +101,9 @@ export const shapedToks = (
     if (extras.length === 0) {
       return (expanded ?? view).fields.map((f) => viewFieldTok(f, opts, visited));
     }
-    return [baseTok("base", renderDs(view.name, opts), opts), ...extras];
+    return extras;
   }
-  const source = wrapsInheritedDatasource(view, opts.datasourceNames)
-    ? view
-    : (expanded ?? view);
-  const fields = source.fields.map((f) => viewFieldTok(f, opts, visited));
-  if (wrapsInheritedDatasource(view, opts.datasourceNames) && view.inherits) {
-    return [baseTok("base", renderDs(view.inherits, opts), opts), ...fields];
-  }
-  return fields;
+  return (expanded ?? view).fields.map((f) => viewFieldTok(f, opts, visited));
 };
 
 export const viewExpr = (

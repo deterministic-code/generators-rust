@@ -3,7 +3,6 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
   authoredViewTypesOf,
-  datasourceTypesOf,
   dictionaryEntryFields,
   dictionaryOfField,
   fieldTypeOf,
@@ -15,7 +14,6 @@ import {
   fieldRefKind,
   isAlias,
   isUnionEnum,
-  wrapsInheritedDatasource,
 } from "./common/view-shape.ts";
 import {
   DeterministicParser,
@@ -35,16 +33,12 @@ import { typesNeedingDefault } from "./struct-default.ts";
 
 class Generator extends Emit {
   private readonly typesByName: Map<string, Type>;
-  private readonly datasourceNames: Set<string>;
   private readonly expandedByName: Map<string, Type>;
 
   constructor(raw: Record<string, string>, deterministic: IDeterministic) {
     super(raw);
     this.typesByName = new Map(
       deterministic.expandedTypes.map((t) => [t.name, t]),
-    );
-    this.datasourceNames = new Set(
-      datasourceTypesOf(deterministic).map((t) => t.name),
     );
     this.expandedByName = new Map(
       viewTypesOf(deterministic).map((v) => [v.name, v]),
@@ -96,30 +90,7 @@ class Generator extends Emit {
   }
 
   private structFields(view: Type, expanded: Type | undefined) {
-    const fields = emitViewFields(view, expanded, this.datasourceNames).map(
-      (f) => this.fieldToken(f),
-    );
-    const synthetic = (ident: string, rustType: string) => ({
-      ident,
-      rustType,
-      defaultExpr: rustLanguageZero(rustType),
-    });
-    if (isAlias(view) && fields.length > 0) {
-      return [
-        synthetic("base", this.imports.datasourceQual(view.name)),
-        ...fields,
-      ];
-    }
-    if (
-      view.inherits !== undefined &&
-      wrapsInheritedDatasource(view, this.datasourceNames)
-    ) {
-      return [
-        synthetic("base", this.imports.datasourceQual(view.inherits)),
-        ...fields,
-      ];
-    }
-    return fields;
+    return emitViewFields(view, expanded).map((f) => this.fieldToken(f));
   }
 
   private view(
