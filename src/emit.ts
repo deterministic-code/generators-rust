@@ -10,11 +10,13 @@ import {
 
 /** Settings plus a pack import generator created once; lanes use `this.imports`. */
 export class Emit {
+  readonly raw: Record<string, string>;
   readonly settings: ISettings;
   readonly casing: PackCasing;
   readonly imports: RustImportGenerator;
 
   constructor(raw: Record<string, string>, basePath = ".") {
+    this.raw = raw;
     this.settings = fromSettings(raw);
     this.casing = createCasing(raw);
     this.imports = createImportGenerator(basePath, raw);

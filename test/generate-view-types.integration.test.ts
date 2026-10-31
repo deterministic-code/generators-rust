@@ -286,3 +286,34 @@ describe("generate view types", () => {
     assert.match(place, /city: String::new\(\),/);
   });
 });
+
+describe("generate datasources rust views", () => {
+  it("skips identity aliases and uses local type names", async () => {
+    const entries = await generate({
+      reader: memoryReader({
+        [TYPES_YAML]: `types:
+  - user:
+      tags: [datasource_type, view_type]
+      inherits: set
+      fields:
+        - email:
+            type: string
+  - user_summary:
+      tags: [view_type]
+      inherits: user
+      fields:
+        - display_name:
+            type: string
+`,
+      }),
+      settings: { "backend.datasources": "sqlite" },
+    });
+    const names = entries.map((entry) => entry.filename).sort();
+    assert.equal(names.some((name) => name.endsWith("user.rs")), false);
+    const summary = entries.find((entry) => entry.filename.endsWith("userSummary.rs"));
+    assert.ok(summary);
+    const body = "contents" in summary! ? String(summary.contents) : summary.content;
+    assert.match(body, /#\[derive\(Clone, Debug, PartialEq, Default, datasources::Facet\)\]/);
+    assert.doesNotMatch(body, /crate::types::generated/);
+  });
+});

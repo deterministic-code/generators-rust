@@ -3,7 +3,10 @@
 {{/simpleDoc}}{{#descriptionDoc}}/// Type {{structName}}.
 /// Datasource type: {{datasourceType}}.
 /// Fields: {{fieldCount}}.
-{{/descriptionDoc}}#[derive(Clone, Debug, PartialEq)]
+{{/descriptionDoc}}#[derive(Clone, Debug, PartialEq{{#deriveDefault}}, Default{{/deriveDefault}}{{#facet}}, datasources::Facet{{/facet}})]
+{{#facet}}
+#[facet(crate = ::datasources::facet)]
+{{/facet}}
 pub struct {{structName}} {
 {{#fields}}
     pub {{ident}}: {{rustType}},

@@ -238,3 +238,34 @@ describe("generate", () => {
     assert.match(flags, /amount: 1,/);
   });
 });
+
+describe("generate datasources rust types", () => {
+  it("emits Facet and datasources crate paths", async () => {
+    const byName = indexEntries(
+      await generate({
+        reader: memoryReader({
+          [TYPES_YAML]: `types:
+  - stamp:
+      tags: [datasource_type]
+      inherits: set
+      fields:
+        - created:
+            type: datetime
+            default_value: UtcNow
+        - token:
+            type: uuid
+            default_value: NewId
+`,
+        }),
+        settings: { "backend.datasources": "sqlite" },
+      }),
+    );
+    const stamp = entryBody(requireEntry(byName, "stamp.rs"));
+    assert.match(stamp, /#\[derive\(Clone, Debug, PartialEq, datasources::Facet\)\]/);
+    assert.match(stamp, /#\[facet\(crate = ::datasources::facet\)\]/);
+    assert.match(stamp, /datasources::chrono::Utc::now\(\)/);
+    assert.match(stamp, /datasources::uuid::Uuid::new_v4\(\)/);
+    assert.doesNotMatch(stamp, /(?<![:\w])chrono::/);
+    assert.doesNotMatch(stamp, /(?<![:\w])uuid::/);
+  });
+});

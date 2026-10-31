@@ -390,3 +390,11 @@ describe("RustImportGenerator flat basePath", () => {
     assert.equal(imports.appWiring(), "features/app_wiring.rs");
   });
 });
+
+describe("RustImportGenerator datasources local types", () => {
+  it("qualifies sibling types by name", () => {
+    const imports = createImportGenerator(".", { "backend.datasources": "sqlite" });
+    assert.equal(imports.datasourceQual("user"), "User");
+    assert.equal(imports.viewQual("card_payment"), "CardPayment");
+  });
+});

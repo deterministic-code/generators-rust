@@ -15,7 +15,10 @@ pub enum {{structName}} {
     {{variant}}({{&memberType}}),
 {{/members}}
 }
-{{/isUnion}}{{#isStruct}}#[derive(Clone, Debug, PartialEq)]
+{{/isUnion}}{{#isStruct}}#[derive(Clone, Debug, PartialEq{{#deriveDefault}}, Default{{/deriveDefault}}{{#facet}}, datasources::Facet{{/facet}})]
+{{#facet}}
+#[facet(crate = ::datasources::facet)]
+{{/facet}}
 pub struct {{structName}} {
 {{#fields}}
     pub {{ident}}: {{&rustType}},

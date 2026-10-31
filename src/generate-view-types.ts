@@ -24,6 +24,7 @@ import {
 } from "./specification-parser.ts";
 import {
   convertSpecType,
+  qualifyRustPath,
   rustLanguageZero,
   rustSpecDefaultExpr,
 } from "./deterministic-type-converter.ts";
@@ -47,9 +48,14 @@ class Generator extends Emit {
 
   from(deterministic: IDeterministic): GenerateEntry[] {
     const needingDefault = typesNeedingDefault(deterministic);
-    return authoredViewTypesOf(deterministic).map((view) =>
-      this.view(view, this.expandedByName.get(view.name), needingDefault),
-    );
+    return authoredViewTypesOf(deterministic).flatMap((view) => {
+      const entry = this.view(view, this.expandedByName.get(view.name), needingDefault);
+      return entry === undefined ? [] : [entry];
+    });
+  }
+
+  private qualify(path: string): string {
+    return qualifyRustPath(this.raw, path);
   }
 
   private rustPart(field: TypeField): string {
@@ -84,8 +90,8 @@ class Generator extends Emit {
           : undefined;
     return {
       ident: this.casing.convertFields(field.name),
-      rustType,
-      defaultExpr: specExpr ?? rustLanguageZero(rustType),
+      rustType: this.qualify(rustType),
+      defaultExpr: this.qualify(specExpr ?? rustLanguageZero(rustType)),
     };
   }
 
@@ -97,7 +103,7 @@ class Generator extends Emit {
     view: Type,
     expanded: Type | undefined,
     needingDefault: Set<string>,
-  ): GenerateEntry {
+  ): GenerateEntry | undefined {
     const structName = this.casing.convertTypes(view.name);
     const isUnion = isUnionEnum(view);
     const members = (view.union ?? []).map((name) => ({
@@ -106,7 +112,11 @@ class Generator extends Emit {
     }));
     const fields = isUnion ? [] : this.structFields(view, expanded);
     const alias = !isUnion && isAlias(view) && fields.length === 0;
+    const aliasType = isAlias(view) ? this.imports.datasourceQual(view.name) : "";
+    if (alias && aliasType === structName) return undefined;
     const isStruct = !alias && !isUnion;
+    const implDefault = isStruct && needingDefault.has(view.name);
+    const facet = isStruct && this.raw["backend.datasources"] !== undefined && this.raw["backend.datasources"] !== "";
     return content(
       this.imports.view(view.name),
       fill(typeTmpl, {
@@ -118,10 +128,12 @@ class Generator extends Emit {
         target: isUnion ? "UnionView" : "ShapedView",
         fieldCount: String(isStruct ? fields.length : 0),
         isAlias: alias,
-        aliasType: isAlias(view) ? this.imports.datasourceQual(view.name) : "",
+        aliasType,
         isUnion,
         isStruct,
-        implDefault: isStruct && needingDefault.has(view.name),
+        implDefault,
+        deriveDefault: facet && !implDefault,
+        facet,
         needsHashMap: fields.some((f) => f.rustType.includes("HashMap<")),
         members,
         fields,

@@ -47,6 +47,7 @@ const crateFromFile = (toFile: string): string => {
 export class RustImportGenerator implements IImportGenerator {
   private readonly organizeByFeature: boolean;
   private readonly flat: boolean;
+  private readonly localTypes: boolean;
   private readonly basePath: string;
   private readonly casing: PackCasing;
 
@@ -55,6 +56,9 @@ export class RustImportGenerator implements IImportGenerator {
     this.flat = basePath !== "" && basePath !== ".";
     this.organizeByFeature =
       !this.flat && settings["other.organize_by_feature"] === "true";
+    this.localTypes =
+      settings["backend.datasources"] !== undefined &&
+      settings["backend.datasources"] !== "";
     this.casing = createCasing(settings);
   }
 
@@ -263,6 +267,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   private typeQual(toFile: string, symbol: string): string {
+    if (this.localTypes) return symbol;
     const crate = this.spec("", toFile);
     if (this.organizeByFeature) return `${crate}::${symbol}`;
     const parts = crate.split("::");
