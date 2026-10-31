@@ -3,7 +3,6 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
   authoredViewTypesOf,
-  datasourceTypesOf,
   dictionaryEntryFields,
   dictionaryOfField,
   viewTypesOf,
@@ -13,7 +12,6 @@ import {
   fieldRefKind,
   isAlias,
   isUnionEnum,
-  wrapsInheritedDatasource,
 } from "./common/view-shape.ts";
 import {
   DeterministicParser,
@@ -33,16 +31,12 @@ import { Emit } from "./emit.ts";
 
 class Generator extends Emit {
   private readonly typesByName: Map<string, Type>;
-  private readonly datasourceNames: Set<string>;
   private readonly expandedByName: Map<string, Type>;
 
   constructor(raw: Record<string, string>, deterministic: IDeterministic) {
     super(raw);
     this.typesByName = new Map(
       deterministic.expandedTypes.map((t) => [t.name, t]),
-    );
-    this.datasourceNames = new Set(
-      datasourceTypesOf(deterministic).map((t) => t.name),
     );
     this.expandedByName = new Map(
       viewTypesOf(deterministic).map((v) => [v.name, v]),
@@ -96,16 +90,10 @@ class Generator extends Emit {
 
   private shapedBody(view: Type, expanded: Type | undefined): string[] {
     const checks: string[] = [];
-    const extras = emitViewFields(view, expanded, this.datasourceNames);
+    const extras = emitViewFields(view, expanded);
     if (isAlias(view) && extras.length === 0) {
       const fn = this.validatorFn(view.name, "datasource");
       checks.push(fill(checkRequiredTmpl, { fn, arg: "obj" }).trimEnd());
-    } else if (isAlias(view)) {
-      const fn = this.validatorFn(view.name, "datasource");
-      checks.push(fill(checkRequiredTmpl, { fn, arg: "&obj.base" }).trimEnd());
-    } else if (wrapsInheritedDatasource(view, this.datasourceNames)) {
-      const fn = this.validatorFn(view.inherits!, "datasource");
-      checks.push(fill(checkRequiredTmpl, { fn, arg: "&obj.base" }).trimEnd());
     }
     for (const line of extras.map((f) => this.checkField(f))) {
       if (line !== "") checks.push(line);

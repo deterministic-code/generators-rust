@@ -7,25 +7,13 @@ export const isAlias = (view: Type): boolean =>
 export const isUnionEnum = (view: Type): boolean =>
   view.kind === "union" && (view.union?.length ?? 0) > 0;
 
-export const wrapsInheritedDatasource = (
-  view: Type,
-  datasourceNames: Set<string>,
-): boolean =>
-  !isAlias(view) &&
-  view.kind === "inherit" &&
-  view.inherits !== undefined &&
-  datasourceNames.has(view.inherits) &&
-  (view.removeFields?.length ?? 0) === 0;
-
 export const emitViewFields = (
   view: Type,
   expanded: Type | undefined,
-  datasourceNames: Set<string>,
 ): TypeField[] => {
   if (isAlias(view)) {
     return (expanded?.fields ?? view.fields).filter(isCollectionField);
   }
-  if (wrapsInheritedDatasource(view, datasourceNames)) return view.fields;
   return expanded?.fields ?? view.fields;
 };
 

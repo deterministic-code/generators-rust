@@ -37,6 +37,12 @@ const TYPES = `types:
       fields:
         - display_name:
             type: string
+  - tagged:
+      tags: [view_type]
+      inherits: tag
+      fields:
+        - extra:
+            type: string
   - payment:
       tags: [view_type]
       union:
@@ -125,6 +131,12 @@ describe("generate view types", () => {
     assert.match(summary, /pub email: String/);
     assert.doesNotMatch(summary, /pub nick_name/);
     assert.doesNotMatch(summary, /pub role_id/);
+    const tagged = await bodyOf("tagged.rs");
+    assert.match(tagged, /pub struct Tagged/);
+    assert.match(tagged, /pub id:/);
+    assert.match(tagged, /pub label:/);
+    assert.match(tagged, /pub extra:/);
+    assert.doesNotMatch(tagged, /pub base:/);
   });
 
   it("emits Default for non-zero spec defaults and nested structs", async () => {
@@ -272,5 +284,36 @@ describe("generate view types", () => {
     assert.match(flags, /home: .*Place::default\(\)/);
     assert.match(place, /impl Default for Place/);
     assert.match(place, /city: String::new\(\),/);
+  });
+});
+
+describe("generate datasources rust views", () => {
+  it("skips identity aliases and uses local type names", async () => {
+    const entries = await generate({
+      reader: memoryReader({
+        [TYPES_YAML]: `types:
+  - user:
+      tags: [datasource_type, view_type]
+      inherits: set
+      fields:
+        - email:
+            type: string
+  - user_summary:
+      tags: [view_type]
+      inherits: user
+      fields:
+        - display_name:
+            type: string
+`,
+      }),
+      settings: { "backend.datasources": "sqlite" },
+    });
+    const names = entries.map((entry) => entry.filename).sort();
+    assert.equal(names.some((name) => name.endsWith("user.rs")), false);
+    const summary = entries.find((entry) => entry.filename.endsWith("userSummary.rs"));
+    assert.ok(summary);
+    const body = "contents" in summary! ? String(summary.contents) : summary.content;
+    assert.match(body, /#\[derive\(Clone, Debug, PartialEq, Default, datasources::Facet\)\]/);
+    assert.doesNotMatch(body, /crate::types::generated/);
   });
 });

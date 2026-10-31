@@ -261,7 +261,7 @@ describe("generate view types tests", () => {
     assert.match(payment, /let _ok: Payment = value;/);
   });
 
-  it("inlines inherited fields, aliases pass-throughs, and wraps a plain inherit", async () => {
+  it("inlines inherited fields and alias pass-throughs", async () => {
     const summary = await bodyOf("userSummaryTests.rs");
     assert.match(summary, /fn gets_display_name\(/);
     assert.match(summary, /fn gets_email\(/);
@@ -271,7 +271,9 @@ describe("generate view types tests", () => {
     assert.match(tag, /fn gets_label\(/);
     assert.match(tag, /fn gets_id\(/);
     const tagged = await bodyOf("taggedTests.rs");
-    assert.match(tagged, /base: crate::types::generated::datasource::Tag \{/);
+    assert.doesNotMatch(tagged, /\bbase:/);
+    assert.match(tagged, /fn gets_id\(/);
+    assert.match(tagged, /fn gets_label\(/);
     assert.match(tagged, /fn gets_extra\(/);
     const orphan = await bodyOf("orphanTests.rs");
     assert.match(orphan, /fn gets_label\(/);

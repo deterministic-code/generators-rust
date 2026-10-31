@@ -116,6 +116,19 @@ export const toNative = (specType: string): string =>
 
 export const convertSpecType = toNative;
 
+export const qualifyRustPath = (
+  settings: Record<string, string>,
+  path: string,
+): string => {
+  if (settings["backend.datasources"] === undefined || settings["backend.datasources"] === "") {
+    return path;
+  }
+  return path
+    .replace(/(^|[^:\w])chrono::/g, "$1datasources::chrono::")
+    .replace(/(^|[^:\w])uuid::/g, "$1datasources::uuid::")
+    .replace(/(^|[^:\w])rust_decimal::/g, "$1datasources::rust_decimal::");
+};
+
 const isRustZeroExpr = (expr: string): boolean =>
   expr === "false" ||
   expr === "0" ||
