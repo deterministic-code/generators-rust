@@ -1,6 +1,7 @@
 import { posix } from "node:path";
 import pluralize from "pluralize";
 import type { IImportGenerator } from "@deterministic-code/generators-common/import-generator";
+import { Paths, type TypeKind } from "@deterministic-code/generators-common/paths";
 import { createCasing, type PackCasing } from "./common/default-casing.ts";
 
 const VARIANT_PREFIXES = ["update_", "create_"] as const;
@@ -50,6 +51,7 @@ export class RustImportGenerator implements IImportGenerator {
   private readonly localTypes: boolean;
   private readonly basePath: string;
   private readonly casing: PackCasing;
+  private readonly paths = new Paths();
 
   constructor(basePath: string, settings: Record<string, string>) {
     this.basePath = basePath;
@@ -71,7 +73,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   datasourceRel(entity: string): string {
-    return this.rel(this.layered("types/generated/datasource"), this.datasource(entity));
+    return this.rel(this.typesLayer("datasource"), this.datasource(entity));
   }
 
   datasourceQual(entity: string): string {
@@ -92,7 +94,7 @@ export class RustImportGenerator implements IImportGenerator {
 
   datasourceValidatorRel(entity: string): string {
     return this.rel(
-      this.layered("types/generated/datasource/validators"),
+      this.typesLayer("datasource", "validators"),
       this.datasourceValidator(entity),
     );
   }
@@ -106,7 +108,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   viewRel(entity: string): string {
-    return this.rel(this.layered("types/generated/views"), this.view(entity));
+    return this.rel(this.typesLayer("view"), this.view(entity));
   }
 
   viewQual(entity: string): string {
@@ -123,7 +125,7 @@ export class RustImportGenerator implements IImportGenerator {
 
   viewValidatorRel(entity: string): string {
     return this.rel(
-      this.layered("types/generated/views/validators"),
+      this.typesLayer("view", "validators"),
       this.viewValidator(entity),
     );
   }
@@ -245,11 +247,7 @@ export class RustImportGenerator implements IImportGenerator {
           : this.viewValidator(entity);
       return `${this.spec("", file)}::${fn}`;
     }
-    const ns = this.layered(
-      kind === "datasource"
-        ? "types/generated/datasource/validators"
-        : "types/generated/views/validators",
-    ).replaceAll("/", "::");
+    const ns = this.typesLayer(kind, "validators").replaceAll("/", "::");
     return `crate::${ns}::${fn}`;
   }
 
@@ -277,6 +275,12 @@ export class RustImportGenerator implements IImportGenerator {
 
   private rsFile(stem: string): string {
     return `${this.casing.fileBase(stem)}.rs`;
+  }
+
+  private typesLayer(kind: TypeKind, extra?: string): string {
+    const dir =
+      extra === undefined ? this.paths.typesDir(kind) : `${this.paths.typesDir(kind)}/${extra}`;
+    return this.layered(dir);
   }
 
   private layered(path: string): string {

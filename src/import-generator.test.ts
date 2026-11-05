@@ -17,7 +17,7 @@ describe("RustImportGenerator layered (organize_by_feature unset)", () => {
     assert.equal(imports.datasource("user"), "user.rs");
     assert.equal(
       imports.datasourceRel("user"),
-      "types/generated/datasource/user.rs",
+      "types/datasource/user.rs",
     );
     assert.equal(
       imports.datasourceQual("user"),
@@ -26,12 +26,12 @@ describe("RustImportGenerator layered (organize_by_feature unset)", () => {
     assert.equal(imports.datasourceValidator("user"), "datasourceUserValidator.rs");
     assert.equal(
       imports.datasourceValidatorRel("user"),
-      "types/generated/datasource/validators/datasourceUserValidator.rs",
+      "types/datasource/validators/datasourceUserValidator.rs",
     );
     assert.equal(imports.view("card_payment"), "cardPayment.rs");
     assert.equal(
       imports.viewRel("card_payment"),
-      "types/generated/views/cardPayment.rs",
+      "types/view/cardPayment.rs",
     );
     assert.equal(
       imports.viewQual("card_payment"),
@@ -40,7 +40,7 @@ describe("RustImportGenerator layered (organize_by_feature unset)", () => {
     assert.equal(imports.viewValidator("card_payment"), "cardPaymentValidator.rs");
     assert.equal(
       imports.viewValidatorRel("user"),
-      "types/generated/views/validators/userValidator.rs",
+      "types/view/validators/userValidator.rs",
     );
     assert.equal(imports.service("user"), "userService.rs");
     assert.equal(
@@ -81,7 +81,7 @@ describe("RustImportGenerator layered (organize_by_feature unset)", () => {
       "crate::user",
     );
     assert.equal(
-      imports.spec("", "types/generated/datasource/user.rs"),
+      imports.spec("", "types/datasource/user.rs"),
       "crate::types::generated::datasource::user",
     );
     assert.equal(imports.spec("", "foo"), "crate::foo");
@@ -374,12 +374,12 @@ describe("RustImportGenerator by-feature", () => {
 
 describe("RustImportGenerator flat basePath", () => {
   it("ignores organize_by_feature and prefixes the directory", () => {
-    const imports = flat("types/generated/datasource", {
+    const imports = flat("types/datasource", {
       "other.organize_by_feature": "true",
     });
-    assert.equal(imports.datasource("user"), "types/generated/datasource/user.rs");
-    assert.equal(imports.datasourceRel("user"), "types/generated/datasource/user.rs");
-    assert.equal(imports.index("types/generated/datasource/user.rs"), "types/generated/datasource/mod.rs");
+    assert.equal(imports.datasource("user"), "types/datasource/user.rs");
+    assert.equal(imports.datasourceRel("user"), "types/datasource/user.rs");
+    assert.equal(imports.index("types/datasource/user.rs"), "types/datasource/mod.rs");
   });
 
   it("treats empty basePath as backend layout, not flat", () => {
