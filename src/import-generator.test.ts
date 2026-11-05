@@ -21,7 +21,7 @@ describe("RustImportGenerator layered (organize_by_feature unset)", () => {
     );
     assert.equal(
       imports.datasourceQual("user"),
-      "crate::types::generated::datasource::User",
+      "crate::types::datasource::User",
     );
     assert.equal(imports.datasourceValidator("user"), "datasourceUserValidator.rs");
     assert.equal(
@@ -35,7 +35,7 @@ describe("RustImportGenerator layered (organize_by_feature unset)", () => {
     );
     assert.equal(
       imports.viewQual("card_payment"),
-      "crate::types::generated::views::CardPayment",
+      "crate::types::view::CardPayment",
     );
     assert.equal(imports.viewValidator("card_payment"), "cardPaymentValidator.rs");
     assert.equal(
@@ -82,29 +82,29 @@ describe("RustImportGenerator layered (organize_by_feature unset)", () => {
     );
     assert.equal(
       imports.spec("", "types/datasource/user.rs"),
-      "crate::types::generated::datasource::user",
+      "crate::types::datasource::user",
     );
     assert.equal(imports.spec("", "foo"), "crate::foo");
     assert.equal(imports.appWiring(), "app_wiring.rs");
     assert.equal(imports.enrichment("role"), "");
     assert.equal(
       imports.validatorFn("datasource", "user", "validate_datasource_user"),
-      "crate::types::generated::datasource::validators::validate_datasource_user",
+      "crate::types::datasource::validators::validate_datasource_user",
     );
     assert.equal(
       imports.validatorFn("view", "user", "validate_user"),
-      "crate::types::generated::views::validators::validate_user",
+      "crate::types::view::validators::validate_user",
     );
     const pascalDirs = createImportGenerator(".", {
       "languages.rust.casing.directories": "Pascal",
     });
     assert.equal(
       pascalDirs.datasourceRel("user"),
-      "Types/Generated/Datasource/user.rs",
+      "Types/Datasource/user.rs",
     );
     assert.equal(
       pascalDirs.validatorFn("datasource", "user", "validate_datasource_user"),
-      "crate::Types::Generated::Datasource::Validators::validate_datasource_user",
+      "crate::Types::Datasource::Validators::validate_datasource_user",
     );
     assert.equal(imports.apiPath("card_payment"), "card-payments");
     assert.equal(imports.apiPath("user"), "users");
@@ -139,11 +139,11 @@ describe("RustImportGenerator layered (organize_by_feature unset)", () => {
     });
     assert.equal(
       snakeTypes.datasourceQual("notification_type"),
-      "crate::types::generated::datasource::notification_type",
+      "crate::types::datasource::notification_type",
     );
     assert.equal(
       snakeTypes.viewQual("user"),
-      "crate::types::generated::views::user",
+      "crate::types::view::user",
     );
   });
 

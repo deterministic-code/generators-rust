@@ -105,7 +105,7 @@ class Generator extends Emit {
     const fnName = this.casing.convertFields(`validate_${view.name}`);
     const path = this.imports.viewValidator(view.name);
     const isUnion = isUnionEnum(view);
-    const enumName = this.casing.convertTypes(view.name);
+    const enumName = this.casing.entityName(view.name);
     const arms = (view.union ?? []).map((name) => {
       const variant = this.casing.convertTypes(name);
       const fn = this.validatorFn(name, "view");

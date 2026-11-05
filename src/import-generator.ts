@@ -1,7 +1,7 @@
 import { posix } from "node:path";
-import pluralize from "pluralize";
 import type { IImportGenerator } from "@deterministic-code/generators-common/import-generator";
 import { Paths, type TypeKind } from "@deterministic-code/generators-common/paths";
+import { Pluralizer } from "@deterministic-code/generators-common/pluralizer";
 import { createCasing, type PackCasing } from "./common/default-casing.ts";
 
 const VARIANT_PREFIXES = ["update_", "create_"] as const;
@@ -11,11 +11,9 @@ const featureEntity = (entity: string): string => {
   return prefix === undefined ? entity : entity.slice(prefix.length);
 };
 
-const pluralSnake = (entity: string): string => {
-  const parts = entity.split(/[_-]/);
-  parts[parts.length - 1] = pluralize.plural(parts[parts.length - 1]!);
-  return parts.join("_");
-};
+const pluralizer = new Pluralizer();
+
+const pluralSnake = (entity: string): string => pluralizer.plural(entity.replace(/-/g, "_"));
 
 const CUSTOM_SUFFIX_TOKENS = new Set(["service", "route"]);
 
@@ -65,7 +63,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   datasource(entity: string): string {
-    const file = this.rsFile(entity);
+    const file = this.typeFile(entity);
     const path = this.organizeByFeature
       ? this.featurePath(entity, file)
       : file;
@@ -79,7 +77,7 @@ export class RustImportGenerator implements IImportGenerator {
   datasourceQual(entity: string): string {
     return this.typeQual(
       this.datasourceRel(entity),
-      this.casing.convertTypes(entity),
+      this.casing.entityName(entity),
     );
   }
 
@@ -100,7 +98,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   view(entity: string): string {
-    const file = this.rsFile(entity);
+    const file = this.typeFile(entity);
     const path = this.organizeByFeature
       ? this.featurePath(featureEntity(entity), file)
       : file;
@@ -112,7 +110,7 @@ export class RustImportGenerator implements IImportGenerator {
   }
 
   viewQual(entity: string): string {
-    return this.typeQual(this.viewRel(entity), this.casing.convertTypes(entity));
+    return this.typeQual(this.viewRel(entity), this.casing.entityName(entity));
   }
 
   viewValidator(entity: string): string {
@@ -275,6 +273,10 @@ export class RustImportGenerator implements IImportGenerator {
 
   private rsFile(stem: string): string {
     return `${this.casing.fileBase(stem)}.rs`;
+  }
+
+  private typeFile(entity: string): string {
+    return this.rsFile(this.paths.typeStem(entity));
   }
 
   private typesLayer(kind: TypeKind, extra?: string): string {

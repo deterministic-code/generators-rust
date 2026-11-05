@@ -1,4 +1,4 @@
-import pluralize from "pluralize";
+import { Pluralizer } from "@deterministic-code/generators-common/pluralizer";
 import { fill } from "@deterministic-code/generators-common/fill";
 import type { GenerateContext } from "@deterministic-code/generators-common/generate-context";
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
@@ -60,11 +60,10 @@ type NormalizedByField = {
   unique: boolean;
 };
 
-const pluralSnakeField = (entity: string): string => {
-  const parts = entity.split(/[_-]/);
-  parts[parts.length - 1] = pluralize.plural(parts[parts.length - 1]!);
-  return parts.join("_");
-};
+const pluralizer = new Pluralizer();
+
+const pluralSnakeField = (entity: string): string =>
+  pluralizer.plural(entity.replace(/-/g, "_"));
 
 const normalizeByFields = (byFields: RouteByField[]): NormalizedByField[] =>
   byFields

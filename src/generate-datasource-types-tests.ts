@@ -44,7 +44,7 @@ class Generator extends Emit {
         this.imports.test(src, table.name),
         fill(typeTestTmpl, {
           schemaVersion: this.settings.schemaVersion,
-          structName: this.casing.convertTypes(table.name),
+          structName: this.casing.entityName(table.name),
           fileBase: this.casing.fileBase(table.name),
           fields,
         }),

@@ -255,13 +255,13 @@ describe("generate view types", () => {
         settings: {},
       }),
     );
-    const flagsFile = [...map.keys()].find((name) => name.endsWith("flags.rs"));
+    const flagsFile = [...map.keys()].find((name) => name.endsWith("flag.rs"));
     const placeFile = [...map.keys()].find((name) => name.endsWith("place.rs"));
-    assert.ok(flagsFile, "missing flags.rs generate entry");
+    assert.ok(flagsFile, "missing flag.rs generate entry");
     assert.ok(placeFile, "missing place.rs generate entry");
     const flags = entryBody(requireEntry(map, flagsFile));
     const place = entryBody(requireEntry(map, placeFile));
-    assert.match(flags, /impl Default for Flags/);
+    assert.match(flags, /impl Default for Flag/);
     assert.match(flags, /is_enabled: true,/);
     assert.match(flags, /empty_name: String::new\(\),/);
     assert.doesNotMatch(flags, /String::from\(""\)/);

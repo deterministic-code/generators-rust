@@ -203,8 +203,8 @@ describe("generate", () => {
         settings: {},
       }),
     );
-    const flags = entryBody(requireEntry(byName, "flags.rs"));
-    assert.match(flags, /impl Default for Flags/);
+    const flags = entryBody(requireEntry(byName, "flag.rs"));
+    assert.match(flags, /impl Default for Flag/);
     assert.match(flags, /is_enabled: true,/);
     assert.match(flags, /is_disabled: false,/);
     assert.match(flags, /count: 0,/);

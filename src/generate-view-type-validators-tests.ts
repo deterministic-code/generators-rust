@@ -23,7 +23,7 @@ import { Emit } from "./emit.ts";
 
 const shapedCases = (view: Type, opts: ViewTestOpts) => {
   const fields = shapedToks(view, opts, new Set([view.name]));
-  const cls = opts.casing.convertTypes(view.name);
+  const cls = opts.casing.entityName(view.name);
   const cases = [
     {
       ident: "parses_a_valid_payload",
@@ -42,7 +42,7 @@ const shapedCases = (view: Type, opts: ViewTestOpts) => {
 };
 
 const unionCases = (view: Type, opts: ViewTestOpts) => {
-  const cls = opts.casing.convertTypes(view.name);
+  const cls = opts.casing.entityName(view.name);
   return (view.union ?? []).map((name) => ({
     ident: opts.casing.fnIdent(`accepts_${name}_member`),
     fixture: `${cls}::${opts.casing.convertTypes(name)}(${viewExpr(name, opts, new Set([view.name]))})`,

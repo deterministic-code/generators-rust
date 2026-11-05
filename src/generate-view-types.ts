@@ -104,7 +104,7 @@ class Generator extends Emit {
     expanded: Type | undefined,
     needingDefault: Set<string>,
   ): GenerateEntry | undefined {
-    const structName = this.casing.convertTypes(view.name);
+    const structName = this.casing.entityName(view.name);
     const isUnion = isUnionEnum(view);
     const members = (view.union ?? []).map((name) => ({
       variant: this.casing.convertTypes(name),

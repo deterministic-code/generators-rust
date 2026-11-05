@@ -49,7 +49,7 @@ class Generator extends Emit implements ViewTestOpts {
 
   private tests(view: Type): GenerateEntry {
     const isUnion = isUnionEnum(view);
-    const cls = this.casing.convertTypes(view.name);
+    const cls = this.casing.entityName(view.name);
     const members = isUnion
       ? (view.union ?? []).map((name) => ({
           acceptsMemberTest: this.casing.fnIdent(`accepts_${name}_member`),

@@ -243,9 +243,9 @@ describe("generate view types tests", () => {
     assert.match(card, /active: false/);
     assert.match(card, /token: String::from\("00000000-0000-0000-0000-000000000000"\)/);
     assert.match(card, /avatar: Vec::<u8>::new\(\)/);
-    assert.match(card, /tags: vec!\[crate::types::generated::datasource::Tag \{/);
-    assert.match(card, /ghost: crate::types::generated::datasource::Missing \{\}/);
-    assert.match(card, /owner: crate::types::generated::views::UserSummary \{/);
+    assert.match(card, /tags: vec!\[crate::types::datasource::Tag \{/);
+    assert.match(card, /ghost: crate::types::datasource::Missing \{\}/);
+    assert.match(card, /owner: crate::types::view::UserSummary \{/);
     assert.match(card, /note: Some\(String::from\("sample"\)\)/);
     assert.match(card, /flags: Some\(vec!\[false\]\)/);
     assert.match(card, /fn gets_note\(/);
@@ -283,7 +283,7 @@ describe("generate view types tests", () => {
     const union = await bodyOf("emptyUnionTests.rs");
     assert.doesNotMatch(union, /fn accepts_/);
     const wrap = await bodyOf("wrapsEmptyTests.rs");
-    assert.match(wrap, /inner: crate::types::generated::views::EmptyUnion \{\}/);
+    assert.match(wrap, /inner: crate::types::view::EmptyUnion \{\}/);
   });
 
   it("covers unsigned inherited columns and nullable parent fields", async () => {

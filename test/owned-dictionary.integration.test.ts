@@ -123,8 +123,8 @@ const hasEnding = (map: Map<string, GenerateEntry>, suffix: string): boolean =>
 describe("owned dictionary codegen", () => {
   it("emits Settings as a row-shaped datasource type", async () => {
     const entries = indexEntries(await generateDatasourceTypes(ctx));
-    const settings = bodyEnding(entries, "settings.rs");
-    assert.match(settings, /pub struct Settings/);
+    const settings = bodyEnding(entries, "setting.rs");
+    assert.match(settings, /pub struct Setting/);
     assert.match(settings, /pub setting_id:/);
     assert.match(settings, /pub key:/);
     assert.match(settings, /pub value:/);
@@ -133,7 +133,7 @@ describe("owned dictionary codegen", () => {
     const file = bodyEnding(entries, "file.rs");
     assert.doesNotMatch(file, /settings/);
     assert.doesNotMatch(file, /HashMap</);
-    const prefs = bodyEnding(entries, "contactPreferences.rs");
+    const prefs = bodyEnding(entries, "contactPreference.rs");
     assert.match(prefs, /pub locale:/);
     assert.match(prefs, /pub timezone:/);
     assert.doesNotMatch(prefs, /pub value:/);
@@ -150,10 +150,10 @@ describe("owned dictionary codegen", () => {
     assert.match(file, /pub settings: HashMap<String, String>/);
     const contact = bodyEnding(entries, "contact.rs");
     assert.match(contact, /pub prefs: HashMap<String, /);
-    assert.match(contact, /LocalePreferences/);
+    assert.match(contact, /LocalePreference/);
     const card = bodyEnding(entries, "contactCard.rs");
     assert.match(card, /pub labels: HashMap<String, String>/);
-    const locale = bodyEnding(entries, "localePreferences.rs");
-    assert.match(locale, /pub struct LocalePreferences/);
+    const locale = bodyEnding(entries, "localePreference.rs");
+    assert.match(locale, /pub struct LocalePreference/);
   });
 });
