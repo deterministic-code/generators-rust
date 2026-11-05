@@ -118,7 +118,7 @@ class Generator extends Emit {
     const fields = persistedColumnFields(table, typesByName).map((f) =>
       fieldTok(f, this.casing, typesByName),
     );
-    const cls = this.casing.convertTypes(table.name);
+    const cls = this.casing.entityName(table.name);
     const src = this.imports.datasource(table.name);
     return content(
       this.imports.test(src, table.name),

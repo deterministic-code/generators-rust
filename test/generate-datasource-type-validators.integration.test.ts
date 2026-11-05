@@ -102,7 +102,7 @@ describe("generate datasource type validators", () => {
     const user = await userBody();
     assert.match(
       user,
-      /pub fn validate_datasource_user\(obj: &crate::types::generated::datasource::User\)/,
+      /pub fn validate_datasource_user\(obj: &crate::types::datasource::User\)/,
     );
     assert.match(user, /must be nonnegative/);
     assert.match(user, /must be at least 3 chars/);

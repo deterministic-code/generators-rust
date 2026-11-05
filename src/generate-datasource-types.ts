@@ -67,7 +67,7 @@ class Generator extends Emit {
         defaultExpr: this.qualify(specExpr ?? rustLanguageZero(native)),
       };
     });
-    const structName = this.casing.convertTypes(table.name);
+    const structName = this.casing.entityName(table.name);
     return content(
       this.imports.datasource(table.name),
       fill(typeTmpl, {
