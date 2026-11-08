@@ -22,10 +22,10 @@ const TYPES = `types:
       inherits: set
       fields:
         - user_id:
-            type: number
+            type: integer
             references: user.id
         - role_id:
-            type: number
+            type: integer
             references: role.id
 `;
 

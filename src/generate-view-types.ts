@@ -5,7 +5,6 @@ import {
   authoredViewTypesOf,
   dictionaryEntryFields,
   dictionaryOfField,
-  fieldTypeOf,
   tableKind,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
@@ -86,7 +85,7 @@ class Generator extends Emit {
       field.isArray || field.isMap === true
         ? undefined
         : field.kind === "primitive"
-          ? rustSpecDefaultExpr(fieldTypeOf(field, this.typesByName), field)
+          ? rustSpecDefaultExpr(field.type, field)
           : undefined;
     return {
       ident: this.casing.convertFields(field.name),

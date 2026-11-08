@@ -13,7 +13,7 @@ const TYPES = `types:
             type: string
             size: 256
         - role_id:
-            type: number
+            type: integer
             references: role.id
   - role:
       tags: [datasource_type, view_type, readonly_lookup]

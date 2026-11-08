@@ -103,7 +103,7 @@
   },
   "dependencies": {
     "@deterministic-code/deterministic-generators-common": "github:deterministic-code/deterministic-generators-common#main",
-    "@deterministic-code/generators-common": "github:deterministic-code/generators-common#a519c547dd091fc39bb0cbe076230205848057a0",
+    "@deterministic-code/generators-common": "github:deterministic-code/generators-common#e5a240e41478fd52efe4a240c2d80e9da49f1557",
     "@deterministic-code/generators-openapi": "github:deterministic-code/generators-openapi",
     "mustache": "^4.2.0",
     "pluralize": "^8.0.0",

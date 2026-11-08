@@ -3,7 +3,6 @@ import type { GenerateContext } from "@deterministic-code/generators-common/gene
 import { content, type GenerateEntry } from "@deterministic-code/generators-common/generate-entry";
 import {
   datasourceTypesOf,
-  fieldTypeOf,
   persistedColumnFields,
   tableKind,
 } from "@deterministic-code/generators-common/spec-types";
@@ -29,11 +28,8 @@ class Generator extends Emit {
     return qualifyRustPath(this.raw, path);
   }
 
-  private rustTypeFor(
-    field: TypeField,
-    typesByName: ReadonlyMap<string, Type>,
-  ): { rustType: string; native: string } {
-    const native = convertSpecType(fieldTypeOf(field, typesByName));
+  private rustTypeFor(field: TypeField): { rustType: string; native: string } {
+    const native = convertSpecType(field.type);
     const t = this.qualify(native);
     return {
       rustType: field.isNullable ? `Option<${t}>` : t,
@@ -59,8 +55,8 @@ class Generator extends Emit {
     const implDefault = needingDefault.has(table.name);
     const facet = this.raw["backend.datasources"] !== undefined && this.raw["backend.datasources"] !== "";
     const fields = persistedColumnFields(table, typesByName).map((f) => {
-      const { rustType, native } = this.rustTypeFor(f, typesByName);
-      const specExpr = rustSpecDefaultExpr(fieldTypeOf(f, typesByName), f);
+      const { rustType, native } = this.rustTypeFor(f);
+      const specExpr = rustSpecDefaultExpr(f.type, f);
       return {
         ident: this.casing.convertFields(f.name),
         rustType,
