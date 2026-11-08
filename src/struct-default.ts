@@ -1,7 +1,6 @@
 import {
   authoredViewTypesOf,
   datasourceTypesOf,
-  fieldTypeOf,
   persistedColumnFields,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
@@ -24,7 +23,7 @@ const hasNonZeroDefault = (
   fields.some(
     (field) =>
       field.kind === "primitive" &&
-      rustSpecDefaultExpr(fieldTypeOf(field, typesByName), field) !== undefined,
+      rustSpecDefaultExpr(field.type, field) !== undefined,
   );
 
 const directNested = (fields: readonly TypeField[]): string[] =>
