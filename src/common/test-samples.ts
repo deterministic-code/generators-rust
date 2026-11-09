@@ -32,6 +32,11 @@ export const samplesForNative = (
         sample: "uuid::Uuid::nil()",
         next: "uuid::Uuid::from_u128(1)",
       };
+    case "rust_decimal::Decimal":
+      return {
+        sample: '"0".parse::<rust_decimal::Decimal>().unwrap()',
+        next: '"1".parse::<rust_decimal::Decimal>().unwrap()',
+      };
     case "Vec<u8>":
       return { sample: "Vec::<u8>::new()", next: "vec![1u8]" };
     case "chrono::DateTime<chrono::Utc>":

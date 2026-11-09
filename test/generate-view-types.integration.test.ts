@@ -119,7 +119,7 @@ describe("generate view types", () => {
   it("renders a shaped view, a union enum, and an inlined inherit", async () => {
     const card = await bodyOf("cardPayment.rs");
     assert.match(card, /pub struct CardPayment/);
-    assert.match(card, /pub amount: String/);
+    assert.match(card, /pub amount: rust_decimal::Decimal/);
     assert.match(card, /pub tags: Vec</);
     assert.match(card, /pub note: Option<String>/);
     const payment = await bodyOf("payment.rs");
@@ -266,13 +266,16 @@ describe("generate view types", () => {
     assert.match(flags, /empty_name: String::new\(\),/);
     assert.doesNotMatch(flags, /String::from\(""\)/);
     assert.match(flags, /opted_out: Some\(false\),/);
-    assert.match(flags, /token: uuid::Uuid::new_v4\(\)\.to_string\(\),/);
-    assert.match(flags, /price: String::from\("1.50"\),/);
-    assert.match(flags, /local_now: chrono::Utc::now\(\),/);
-    assert.match(flags, /empty_id: uuid::Uuid::nil\(\)\.to_string\(\),/);
+    assert.match(flags, /token: uuid::Uuid::new_v4\(\),/);
     assert.match(
       flags,
-      /fixed_id: String::from\("11111111-1111-4111-8111-111111111111"\),/,
+      /price: "1\.50"\.parse::<rust_decimal::Decimal>\(\)\.unwrap\(\),/,
+    );
+    assert.match(flags, /local_now: chrono::Utc::now\(\),/);
+    assert.match(flags, /empty_id: uuid::Uuid::nil\(\),/);
+    assert.match(
+      flags,
+      /fixed_id: uuid::Uuid::parse_str\("11111111-1111-4111-8111-111111111111"\)\.unwrap\(\),/,
     );
     assert.match(flags, /initial: String::from\("X"\),/);
     assert.match(flags, /ratio: 1.5,/);

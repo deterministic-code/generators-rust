@@ -231,7 +231,7 @@ describe("generate view types tests", () => {
     assert.match(card, /schema-version: 1\.0/);
     assert.match(card, /use super::cardPayment::\*;/);
     assert.match(card, /fn sample\(\) -> CardPayment \{/);
-    assert.match(card, /amount: String::from\("0"\)/);
+    assert.match(card, /amount: "0"\.parse::<rust_decimal::Decimal>\(\)\.unwrap\(\)/);
     assert.match(
       card,
       /paid_at: chrono::DateTime::parse_from_rfc3339\("2024-01-01T00:00:00.000Z"\)/,
@@ -241,7 +241,7 @@ describe("generate view types tests", () => {
     assert.match(card, /small_rank: 1i16/);
     assert.match(card, /score: 1\.0f64/);
     assert.match(card, /active: false/);
-    assert.match(card, /token: String::from\("00000000-0000-0000-0000-000000000000"\)/);
+    assert.match(card, /token: uuid::Uuid::nil\(\)/);
     assert.match(card, /avatar: Vec::<u8>::new\(\)/);
     assert.match(card, /tags: vec!\[crate::types::datasource::Tag \{/);
     assert.match(card, /ghost: crate::types::datasource::Missing \{\}/);

@@ -7,11 +7,7 @@ import {
   persistedColumnFields,
 } from "@deterministic-code/generators-common/spec-types";
 import type { PackCasing } from "./common/default-casing.ts";
-import {
-  rustString,
-  samplesForNative,
-  wrapOption,
-} from "./common/test-samples.ts";
+import { samplesForNative, wrapOption } from "./common/test-samples.ts";
 import {
   DeterministicParser,
   TYPES_YAML,
@@ -82,24 +78,6 @@ const casesFor = (cls: string, fields: FieldTok[]): CaseTok[] => {
       ),
       assertion: "is_ok()",
     });
-  }
-  for (const field of fields) {
-    if (field.type === "uuid" && field.native === "String") {
-      cases.push({
-        ident: `rejects_when_invalid_uuid_on_${field.ident}`,
-        fixture: structLiteral(
-          cls,
-          fields.map((f) => ({
-            ident: f.ident,
-            expr:
-              f.ident === field.ident
-                ? wrapOption(rustString("not-a-uuid"), f.isNullable)
-                : f.sampleExpr,
-          })),
-        ),
-        assertion: "is_err()",
-      });
-    }
   }
   return cases;
 };

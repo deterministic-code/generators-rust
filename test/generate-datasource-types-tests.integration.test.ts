@@ -135,7 +135,7 @@ describe("generate datasource types tests", () => {
     );
     assert.match(user, /email: String::from\("sample"\)/);
     assert.match(user, /active: false,/);
-    assert.match(user, /balance: String::from\("0"\)/);
+    assert.match(user, /balance: "0"\.parse::<rust_decimal::Decimal>\(\)\.unwrap\(\)/);
     assert.match(user, /nick_name: Some\(String::from\("sample"\)\)/);
   });
 

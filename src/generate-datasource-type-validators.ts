@@ -30,11 +30,6 @@ const floatLit = (n: number): string => {
   return s.includes(".") ? `${s}f64` : `${s}.0f64`;
 };
 
-const uuidChecks = (prop: string, ref: string): string[] => [
-  `let hex_dashes = ${ref}.len() == 36 && ${ref}.chars().enumerate().all(|(i, c)| if i == 8 || i == 13 || i == 18 || i == 23 { c == '-' } else { c.is_ascii_hexdigit() });`,
-  `if !hex_dashes { errors.push("${prop}: must be a uuid".to_string()); }`,
-];
-
 const rawChecks = (
   field: TypeField,
   prop: string,
@@ -57,8 +52,6 @@ const rawChecks = (
           `${prop}: exceeds ${max} chars`,
         ],
       ]);
-    case "uuid":
-      return uuidChecks(prop, ref);
     case "number":
     case "integer":
     case "smallinteger":
@@ -110,10 +103,7 @@ const checksForField = (
 ): string[] => {
   const prop = casing.convertFields(field.name);
   if (isStandardId) {
-    if (field.type === "string") return [];
-    if (field.type === "uuid") {
-      return uuidChecks(prop, `obj.${prop}.to_string()`).map((l) => pad(1, l));
-    }
+    if (field.type === "string" || field.type === "uuid") return [];
     return [
       pad(
         1,
@@ -124,7 +114,7 @@ const checksForField = (
       ),
     ];
   }
-  const stringLike = field.type === "string" || field.type === "uuid";
+  const stringLike = field.type === "string";
   const ref = field.isNullable ? (stringLike ? "v" : "*v") : `obj.${prop}`;
   const inner = rawChecks(field, prop, ref);
   if (inner.length === 0) return [];
