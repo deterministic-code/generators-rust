@@ -215,17 +215,20 @@ describe("generate", () => {
     assert.match(flags, /blob: vec!\[0\],/);
     assert.match(flags, /stamped: chrono::Utc::now\(\),/);
     assert.match(flags, /opted_out: Some\(false\),/);
-    assert.match(flags, /token: uuid::Uuid::new_v4\(\)\.to_string\(\),/);
-    assert.match(flags, /price: String::from\("1.50"\),/);
+    assert.match(flags, /token: uuid::Uuid::new_v4\(\),/);
+    assert.match(
+      flags,
+      /price: "1\.50"\.parse::<rust_decimal::Decimal>\(\)\.unwrap\(\),/,
+    );
     assert.match(flags, /local_now: chrono::Utc::now\(\),/);
     assert.match(
       flags,
       /explicit_at: "2026-01-01T00:00:00Z"\.parse::<chrono::DateTime<chrono::Utc>>\(\)\.unwrap\(\),/,
     );
-    assert.match(flags, /empty_id: uuid::Uuid::nil\(\)\.to_string\(\),/);
+    assert.match(flags, /empty_id: uuid::Uuid::nil\(\),/);
     assert.match(
       flags,
-      /fixed_id: String::from\("11111111-1111-4111-8111-111111111111"\),/,
+      /fixed_id: uuid::Uuid::parse_str\("11111111-1111-4111-8111-111111111111"\)\.unwrap\(\),/,
     );
     assert.match(flags, /empty_blob: vec!\[\],/);
     assert.match(flags, /initial: String::from\("X"\),/);

@@ -96,14 +96,15 @@ describe("generate datasource type validators tests", () => {
     );
   });
 
-  it("covers parse, nullable, and invalid uuid cases", async () => {
+  it("covers parse and nullable cases", async () => {
     const user = await userBody();
     assert.match(user, /fn parses_a_valid_payload/);
     assert.match(user, /fn accepts_none_for_nullable_fields/);
-    assert.match(user, /fn rejects_when_invalid_uuid_on_token/);
+    assert.doesNotMatch(user, /fn rejects_when_invalid_uuid_on_token/);
     assert.match(user, /validate_datasource_user\(&value\)\.is_ok\(\)/);
     assert.match(user, /nick_name: None/);
-    assert.match(user, /not-a-uuid/);
+    assert.match(user, /token: uuid::Uuid::nil\(\)/);
+    assert.doesNotMatch(user, /not-a-uuid/);
   });
 
   it("writes codegen.schema_version into the file header", async () => {

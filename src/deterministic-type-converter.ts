@@ -21,6 +21,9 @@ const token = (
 
 const quoted = token(spec.string.String!, rustString, /^String::from\("(.*)"\)$/);
 
+const rustDecimal = (arg: string): string =>
+  `"${arg}".parse::<rust_decimal::Decimal>().unwrap()`;
+
 const numeric = (type: string): Record<string, DefaultEntry> => {
   const numericSpec = spec[type]!.Numeric!;
   return {
@@ -40,11 +43,11 @@ export const typeConverter = new DeterministicTypeConverter({
   biginteger: "i64",
   unsignedbiginteger: "u64",
   float: "f64",
-  decimal: "String",
+  decimal: "rust_decimal::Decimal",
   boolean: "bool",
   datetime: "chrono::DateTime<chrono::Utc>",
   binary: "Vec<u8>",
-  uuid: "String",
+  uuid: "uuid::Uuid",
   reference: "i64",
 });
 
@@ -60,7 +63,11 @@ export const defaultValueConverter = new DeterministicDefaultValueConverter({
   unsignedbiginteger: numeric("unsignedbiginteger"),
   float: numeric("float"),
   decimal: {
-    Numeric: token(spec.decimal.Numeric!, rustString, /^String::from\("(.*)"\)$/),
+    Numeric: token(
+      spec.decimal.Numeric!,
+      rustDecimal,
+      /^"(-?[0-9]+(?:\.[0-9]+)?)"\.parse::<rust_decimal::Decimal>\(\)\.unwrap\(\)$/,
+    ),
     String: quoted,
   },
   boolean: {
@@ -98,15 +105,19 @@ export const defaultValueConverter = new DeterministicDefaultValueConverter({
   uuid: {
     NewId: token(
       spec.uuid.NewId!,
-      () => "uuid::Uuid::new_v4().to_string()",
-      /^uuid::Uuid::new_v4\(\)\.to_string\(\)$/,
+      () => "uuid::Uuid::new_v4()",
+      /^uuid::Uuid::new_v4\(\)$/,
     ),
     Empty: token(
       spec.uuid.Empty!,
-      () => "uuid::Uuid::nil().to_string()",
-      /^uuid::Uuid::nil\(\)\.to_string\(\)$/,
+      () => "uuid::Uuid::nil()",
+      /^uuid::Uuid::nil\(\)$/,
     ),
-    Uuid: token(spec.uuid.Uuid!, rustString, /^String::from\("(.*)"\)$/),
+    Uuid: token(
+      spec.uuid.Uuid!,
+      (arg) => `uuid::Uuid::parse_str("${arg}").unwrap()`,
+      /^uuid::Uuid::parse_str\("(.*)"\)\.unwrap\(\)$/,
+    ),
   },
   reference: {},
 });
@@ -136,7 +147,8 @@ const isRustZeroExpr = (expr: string): boolean =>
   expr === "String::new()" ||
   expr === 'String::from("")' ||
   expr === "vec![]" ||
-  expr === "None";
+  expr === "None" ||
+  /^"0(?:\.0+)?"\.parse::<rust_decimal::Decimal>\(\)\.unwrap\(\)$/.test(expr);
 
 /** Spec default expression, or `undefined` when absent or the language zero. */
 export const rustSpecDefaultExpr = (
@@ -173,6 +185,8 @@ export const rustLanguageZero = (rustType: string): string => {
   if (rustType === "chrono::DateTime<chrono::Utc>") {
     return "chrono::DateTime::<chrono::Utc>::UNIX_EPOCH";
   }
+  if (rustType === "uuid::Uuid") return "uuid::Uuid::nil()";
+  if (rustType === "rust_decimal::Decimal") return "rust_decimal::Decimal::ZERO";
   if (rustType === "f64") return "0.0";
   if (
     rustType === "i16" ||
