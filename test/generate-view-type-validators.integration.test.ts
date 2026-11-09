@@ -13,8 +13,14 @@ const TYPES = `types:
         - email:
             type: string
         - role_id:
-            type: number
+            type: integer
             references: role.id
+  - role:
+      tags: [datasource_type]
+      inherits: set
+      fields:
+        - name:
+            type: string
   - tag:
       tags: [datasource_type, view_type]
       inherits: set

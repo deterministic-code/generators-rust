@@ -13,7 +13,7 @@ const TYPES = `types:
         - email:
             type: string
         - role_id:
-            type: number
+            type: integer
             references: role.id
         - nick_name:
             type: string

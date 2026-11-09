@@ -13,7 +13,7 @@ const TYPES = `types:
             type: string
             size: 256
         - role_id:
-            type: number
+            type: integer
             references: role.id
         - active:
             type: boolean
@@ -34,7 +34,7 @@ const TYPES = `types:
       inherits: set
       fields:
         - order_id:
-            type: number
+            type: integer
             references: order.id
         - sku:
             type: string
