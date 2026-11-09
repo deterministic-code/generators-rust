@@ -1,7 +1,6 @@
 import {
   authoredViewTypesOf,
   datasourceTypesOf,
-  fieldTypeOf,
   persistedColumnFields,
   viewTypesOf,
 } from "@deterministic-code/generators-common/spec-types";
@@ -17,14 +16,11 @@ import {
 } from "./common/view-shape.ts";
 import { rustSpecDefaultExpr } from "./deterministic-type-converter.ts";
 
-const hasNonZeroDefault = (
-  fields: readonly TypeField[],
-  typesByName: ReadonlyMap<string, Type>,
-): boolean =>
+const hasNonZeroDefault = (fields: readonly TypeField[]): boolean =>
   fields.some(
     (field) =>
       field.kind === "primitive" &&
-      rustSpecDefaultExpr(fieldTypeOf(field, typesByName), field) !== undefined,
+      rustSpecDefaultExpr(field.type, field) !== undefined,
   );
 
 const directNested = (fields: readonly TypeField[]): string[] =>
@@ -50,7 +46,7 @@ export const typesNeedingDefault = (deterministic: IDeterministic): Set<string> 
 
   const consider = (name: string, fields: readonly TypeField[]): void => {
     nestedByType.set(name, directNested(fields));
-    if (hasNonZeroDefault(fields, typesByName)) seeds.push(name);
+    if (hasNonZeroDefault(fields)) seeds.push(name);
   };
 
   for (const table of datasourceTypesOf(deterministic)) {
