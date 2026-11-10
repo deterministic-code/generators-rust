@@ -90,7 +90,7 @@ class Generator extends Emit {
 
   private shapedBody(view: Type, expanded: Type | undefined): string[] {
     const checks: string[] = [];
-    const extras = emitViewFields(view, expanded);
+    const extras = emitViewFields(view, expanded, this.typesByName);
     if (isAlias(view) && extras.length === 0) {
       const fn = this.validatorFn(view.name, "datasource");
       checks.push(fill(checkRequiredTmpl, { fn, arg: "obj" }).trimEnd());

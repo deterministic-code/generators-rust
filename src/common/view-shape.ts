@@ -10,8 +10,11 @@ export const isUnionEnum = (view: Type): boolean =>
 export const emitViewFields = (
   view: Type,
   expanded: Type | undefined,
+  typesByName: Map<string, Type>,
 ): TypeField[] => {
-  if (isAlias(view)) {
+  const parent =
+    view.inherits === undefined ? undefined : typesByName.get(view.inherits);
+  if (isAlias(view) && (parent === undefined || !typeHasTag(parent, "view_type"))) {
     return (expanded?.fields ?? view.fields).filter(isCollectionField);
   }
   return expanded?.fields ?? view.fields;

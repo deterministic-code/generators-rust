@@ -319,4 +319,103 @@ describe("generate datasources rust views", () => {
     assert.match(body, /#\[derive\(Clone, Debug, PartialEq, Default, datasources::Facet\)\]/);
     assert.doesNotMatch(body, /crate::types::generated/);
   });
+
+  it("flattens a dual-tagged view that inherits a view", async () => {
+    const entries = await generate({
+      reader: memoryReader({
+        [TYPES_YAML]: `types:
+  - games_base:
+      tags: [datasource_type]
+      fields:
+        - id:
+            type: integer
+            is_id: true
+        - name:
+            type: string
+  - game_settings:
+      tags: [datasource_type]
+      fields:
+        - id:
+            type: integer
+            is_id: true
+        - game_id:
+            references: games_base.id
+        - name:
+            type: string
+        - value:
+            type: string
+  - game_settings_map:
+      tags: [view_type]
+      inherits: dictionary
+      fields:
+        - key:
+            type: string
+            references: game_settings.name
+        - value:
+            type: string
+            references: game_settings.value
+  - categories:
+      tags: [datasource_type, view_type]
+      fields:
+        - id:
+            type: integer
+            is_id: true
+        - name:
+            type: string
+  - games:
+      tags: [view_type]
+      inherits: games_base
+      fields:
+        - settings:
+            type: game_settings_map{}
+            references: game_settings.game_id
+        - categories:
+            type: categories[]
+  - template_base:
+      tags: [datasource_type]
+      fields:
+        - id:
+            type: integer
+            is_id: true
+  - resource_base:
+      tags: [datasource_type]
+      fields:
+        - id:
+            type: integer
+            is_id: true
+  - puzzle_game:
+      tags: [datasource_type, view_type]
+      inherits: games
+      fields:
+        - template_id:
+            references: template_base.id
+        - image_id:
+            references: resource_base.id
+            is_nullable: true
+`,
+      }),
+      settings: { "backend.datasources": "sqlite" },
+    });
+    const names = entries.map((entry) => entry.filename);
+    assert.equal(names.some((name) => name.endsWith("category.rs")), false);
+    const game = entries.find((entry) => entry.filename.endsWith("game.rs"));
+    const puzzle = entries.find((entry) => entry.filename.endsWith("puzzleGame.rs"));
+    assert.ok(game);
+    assert.ok(puzzle);
+    const gameBody = "contents" in game! ? String(game.contents) : game.content;
+    const puzzleBody = "contents" in puzzle! ? String(puzzle.contents) : puzzle.content;
+    assert.match(gameBody, /pub struct Game/);
+    assert.match(gameBody, /pub id:/);
+    assert.match(gameBody, /pub name:/);
+    assert.match(gameBody, /pub settings:/);
+    assert.match(gameBody, /pub categories:/);
+    assert.match(puzzleBody, /pub struct PuzzleGame/);
+    assert.doesNotMatch(puzzleBody, /pub type PuzzleGame/);
+    assert.match(puzzleBody, /pub id:/);
+    assert.match(puzzleBody, /pub name:/);
+    assert.match(puzzleBody, /pub settings:/);
+    assert.match(puzzleBody, /pub categories:/);
+    assert.match(puzzleBody, /pub template_id:/);
+    assert.match(puzzleBody, /pub image_id:/);
+  });
 });

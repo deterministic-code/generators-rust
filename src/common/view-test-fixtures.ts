@@ -1,15 +1,13 @@
 import {
   dictionaryEntryFields,
   dictionaryOfField,
-  isCollectionField,
 } from "@deterministic-code/generators-common/spec-types";
-import { isAlias, isUnionEnum } from "./view-shape.ts";
 import { sampleForField, samplesForNative } from "./test-samples.ts";
 import { convertSpecType } from "../deterministic-type-converter.ts";
 import type { PackCasing } from "./default-casing.ts";
 import type { RustImportGenerator } from "../import-generator.ts";
 import type { Type, TypeField } from "../specification-parser.ts";
-import { fieldRefKind } from "./view-shape.ts";
+import { emitViewFields, fieldRefKind, isAlias, isUnionEnum } from "./view-shape.ts";
 
 export type ViewTestOpts = {
   casing: PackCasing;
@@ -94,16 +92,11 @@ export const shapedToks = (
   visited: Set<string>,
 ): FieldTok[] => {
   const expanded = opts.expandedViews.get(view.name);
-  if (isAlias(view)) {
-    const extras = (expanded ?? view).fields
-      .filter(isCollectionField)
-      .map((f) => viewFieldTok(f, opts, visited));
-    if (extras.length === 0) {
-      return (expanded ?? view).fields.map((f) => viewFieldTok(f, opts, visited));
-    }
-    return extras;
+  const fields = emitViewFields(view, expanded, opts.typesByName);
+  if (isAlias(view) && fields.length === 0) {
+    return (expanded ?? view).fields.map((f) => viewFieldTok(f, opts, visited));
   }
-  return (expanded ?? view).fields.map((f) => viewFieldTok(f, opts, visited));
+  return fields.map((f) => viewFieldTok(f, opts, visited));
 };
 
 export const viewExpr = (
@@ -125,8 +118,10 @@ export const viewExpr = (
     return `${cls}::${opts.casing.convertTypes(first)}(${viewExpr(first, opts, next)})`;
   }
   if (isAlias(view)) {
-    const extras = (opts.expandedViews.get(view.name) ?? view).fields.filter(
-      isCollectionField,
+    const extras = emitViewFields(
+      view,
+      opts.expandedViews.get(view.name),
+      opts.typesByName,
     );
     if (extras.length === 0) return renderDs(view.name, opts);
   }
