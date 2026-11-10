@@ -56,7 +56,7 @@ export const typesNeedingDefault = (deterministic: IDeterministic): Set<string> 
   for (const view of authoredViewTypesOf(deterministic)) {
     if (isUnionEnum(view)) continue;
     const expanded = expandedViews.get(view.name);
-    const fields = emitViewFields(view, expanded);
+    const fields = emitViewFields(view, expanded, typesByName);
     if (isAlias(view) && fields.length === 0) continue;
     consider(view.name, fields);
   }

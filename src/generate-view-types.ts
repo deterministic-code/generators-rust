@@ -95,7 +95,7 @@ class Generator extends Emit {
   }
 
   private structFields(view: Type, expanded: Type | undefined) {
-    return emitViewFields(view, expanded).map((f) => this.fieldToken(f));
+    return emitViewFields(view, expanded, this.typesByName).map((f) => this.fieldToken(f));
   }
 
   private view(
